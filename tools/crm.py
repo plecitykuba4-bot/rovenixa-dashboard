@@ -51,7 +51,7 @@ STAGES = ['studeny', 'novy', 'odeslano', 'zajem', 'schuzka', 'pozdeji', 'nabidka
 KINDS = ['web', 'odeslano', 'followup', 'odpoved', 'hovor', 'schuzka', 'uzavreno']
 STAGE_KIND = {'novy': 'web', 'odeslano': 'odeslano', 'zajem': 'odpoved', 'schuzka': 'schuzka', 'uzavreny': 'uzavreno'}
 FIELDS = ['name', 'person', 'phone', 'email', 'city', 'web', 'preview', 'stage', 'price', 'next_date',
-          'next_action', 'sent_date', 'note', 'source', 'made_by', 'owner', 'typ']
+          'next_action', 'sent_date', 'note', 'source', 'made_by', 'owner', 'typ', 'followups', 'last_followup', 'last_call']
 
 
 def call(method, path, body=None):
@@ -139,12 +139,18 @@ def change(clients, ref, fields, actor):
         b['sent_date'] = today()
     if fields.get('add_note'):
         b['note'] = ((c.get('note') or '') + f"\n[{today()}] " + fields['add_note']).strip()
+    if fields.get('followup'):
+        b['followups'] = int(c.get('followups') or 0) + 1
+        b['last_followup'] = today()
     if not b:
         return c
     r = call('PATCH', f"/api/clients/{c['id']}", b)
     if b.get('stage') and b['stage'] != c['stage'] and STAGE_KIND.get(b['stage']) and not fields.get('bez_logu'):
         call('POST', '/api/activity', {'kind': STAGE_KIND[b['stage']], 'count': 1, 'actor': actor,
                                        'date': today(), 'client_id': c['id'], 'note': c['name']})
+    if fields.get('followup') and not fields.get('bez_logu'):
+        call('POST', '/api/activity', {'kind': 'followup', 'count': 1, 'actor': actor, 'date': today(),
+                                       'client_id': c['id'], 'note': c['name']})
     clients[clients.index(c)] = r
     return r
 
@@ -200,6 +206,36 @@ def run_batch(ops, actor):
             print('?? neznámá operace', json.dumps(op, ensure_ascii=False))
 
 
+def fronta():
+    """Stejná logika jako stránka Leady: komu zavolat (viděl web) a komu poslat follow-up."""
+    import re
+    clients = call('GET', '/api/clients')
+    visits = call('GET', '/api/visits')
+    slug = lambda u: re.sub(r'^https?://', '', (u or '').lower()).split('.')[0].split('/')[0].replace('-', '')
+    t = datetime.date.today()
+    zav, fu = [], []
+    for c in clients:
+        if c['stage'] != 'odeslano':
+            continue
+        sl = slug(c.get('preview'))
+        sent = c.get('sent_date') or '9999'
+        human = sorted((v['t'][:10] for v in visits if sl and v['site'].replace('-', '') == sl
+                        and v['t'][:10] >= sent and v['trida'] in ('clovek', 'clovek2')), reverse=True)
+        if human and (not c.get('last_call') or human[0] > c['last_call']):
+            zav.append((c, human[0], len(human)))
+            continue
+        last = max(x for x in [c.get('sent_date'), c.get('last_followup'), c.get('last_call')] if x) if sent != '9999' else None
+        n = int(c.get('followups') or 0)
+        if last and n < 2 and (t - datetime.date.fromisoformat(last[:10])).days >= 3:
+            fu.append((c, n + 1, last))
+    print(f'ZAVOLAT – viděli web ({len(zav)}):')
+    for c, d, n in zav:
+        print(f"  #{c['id']:<4} {c['name'][:42]:<42} {c.get('phone') or '-':<14} viděl {n}×, naposledy {d}")
+    print(f'\nPOSLAT FOLLOW-UP ({len(fu)}):')
+    for c, k, last in fu:
+        print(f"  #{c['id']:<4} {c['name'][:42]:<42} {k}. follow-up  {c.get('email') or '-'}  (naposledy {last}, náhled {c.get('preview') or '-'})")
+
+
 def kv(pairs):
     out = {}
     for p in pairs:
@@ -230,6 +266,7 @@ def main():
     p.add_argument('--client'); p.add_argument('--date')
     p = sp.add_parser('delete'); p.add_argument('table', choices=['clients', 'money', 'activity']); p.add_argument('id', type=int)
     sp.add_parser('stats')
+    sp.add_parser('fronta', help='komu zavolat (viděl web) a komu poslat follow-up')
     a = ap.parse_args()
 
     if a.cmd == 'do':
@@ -257,6 +294,8 @@ def main():
         print('zapsáno', r['amount'], r['status'], c['name'] if c else '')
     elif a.cmd == 'delete':
         print(call('DELETE', f'/api/{a.table}/{a.id}'))
+    elif a.cmd == 'fronta':
+        fronta()
     elif a.cmd == 'stats':
         d = call('GET', '/api/all')
         from collections import Counter

@@ -1,9 +1,9 @@
 // Rovenixa CRM API – Cloudflare Worker + D1
-// Secrets: PASS_JAKUB, PASS_JAN, CLAUDE_KEY, TOKEN_SECRET
+// Secrets: PASS_JAKUB, PASS_JAN, CLAUDE_KEY, TOKEN_SECRET, SPY_URL
 
 const TABLES = {
   clients: ['name', 'person', 'phone', 'email', 'city', 'web', 'preview', 'stage', 'price',
-    'next_date', 'next_action', 'sent_date', 'note', 'source', 'made_by', 'owner', 'typ'],
+    'next_date', 'next_action', 'sent_date', 'note', 'source', 'made_by', 'owner', 'typ', 'followups', 'last_followup', 'last_call'],
   money: ['date', 'kind', 'amount', 'status', 'client_id', 'label'],
   activity: ['date', 'actor', 'kind', 'count', 'client_id', 'note'],
 };
@@ -114,6 +114,23 @@ export default {
       if (!user) return json(req, { error: 'Nepřihlášen' }, 401);
 
       if (p === '/api/me') return json(req, { user });
+
+      // Návštěvy náhledů ze „špióna“ (navrhy-stats) – klíč je jen v secretu SPY_URL
+      if (p === '/api/visits' && req.method === 'GET') {
+        const cache = caches.default;
+        const ck = new Request('https://cache.local/visits');
+        let res = url.searchParams.get('fresh') ? null : await cache.match(ck);
+        if (!res) {
+          const r = await fetch(env.SPY_URL, { headers: { 'User-Agent': 'rovenixa-crm' } });
+          if (!r.ok) return json(req, { error: 'Špión neodpovídá (' + r.status + ')' }, 502);
+          const raw = await r.json();
+          const slim = raw.map((v) => ({ site: v.site, t: v.t, trida: v.trida, verdikt: v.verdikt,
+            detail: v.detail, city: v.city, mobil: (v.w || 9999) < 800 }));
+          res = new Response(JSON.stringify(slim), { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'max-age=120' } });
+          await cache.put(ck, res.clone());
+        }
+        return json(req, await res.json());
+      }
 
       if (p === '/api/all' && req.method === 'GET') {
         const [c, m, a] = await env.DB.batch([

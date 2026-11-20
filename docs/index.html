@@ -238,6 +238,25 @@ dialog::backdrop{background:rgba(35,28,16,.38);backdrop-filter:blur(2px)}
 .hc-v{position:absolute;bottom:100%;left:50%;transform:translateX(-50%);margin-bottom:4px;font-size:12.5px;font-weight:650;color:var(--ink-2);white-space:nowrap}
 .hc-lab{font-size:12.5px;color:var(--ink-3);text-align:center;padding-top:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 @media (max-width:860px){.hc-cols{height:190px;gap:3px}.hc-v{font-size:11px}.hc-lab{font-size:11px}}
+.s-zavolat{background:#DDEBDD;color:#2E6B33}
+.s-followup{background:#F6E6C8;color:#7A5212}
+.flow{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.flow-step{display:grid;grid-template-columns:auto 1fr;grid-template-rows:auto auto;column-gap:14px;align-items:center;text-align:left;border:1px solid var(--line);background:var(--card);border-radius:var(--radius);padding:14px 18px;cursor:pointer;box-shadow:var(--shadow);text-decoration:none;color:var(--ink);font:inherit;transition:border-color .2s,background .2s}
+.flow-step:hover{border-color:var(--gold-3)}
+.flow-step .n{grid-row:1/3;font-family:"Gloock",serif;font-size:34px;line-height:1;min-width:44px}
+.flow-step .t{font-weight:650}
+.flow-step .d{font-size:12.5px;color:var(--ink-3)}
+.flow-step.on{border-color:var(--gold-2);background:var(--gold-bg-2)}
+.flow-step.f-zavolat .n{color:var(--ok)}
+.flow-step.f-followup .n{color:#9A6A18}
+.funnel.five{grid-template-columns:repeat(5,1fr)}
+table.leads td{vertical-align:top}
+.acts{display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap}
+.seen{font-size:13px;font-weight:600;color:var(--ink-3);display:inline-flex;align-items:center;gap:4px}
+.seen.yes{color:var(--ok)}
+.note-cell{max-width:280px;font-size:13px;color:var(--ink-2);line-height:1.4}
+@media (max-width:1100px){.flow{grid-template-columns:1fr 1fr}.funnel.five{grid-template-columns:repeat(3,1fr)}}
+@media (max-width:860px){.flow{gap:8px}.flow-step{padding:10px 12px;column-gap:10px}.flow-step .d{display:none}.flow-step .n{font-size:24px;min-width:0}.funnel.five{grid-template-columns:1fr 1fr}}
 .s-typ{background:#EFE9DD;color:#5A4E3C}.s-typ::before{display:none}
 .pay-box{background:var(--gold-bg-2);border:1px solid var(--line);border-radius:14px;padding:12px 14px 2px;margin-bottom:14px}
 details.more{border-top:1px solid var(--line);margin-top:4px;padding-top:12px}
@@ -371,7 +390,7 @@ const VIEWS = [
 ];
 
 const S = { user:null, token:null, clients:[], money:[], activity:[], view:'prehled',
-  leadFilter:'all', leadQ:'', leadBy:'', showLost:false, week:0, moneyFilter:'all', owner:'', lastSync:null };
+  leadFilter:'akce', visits:[], leadQ:'', leadBy:'', showLost:false, week:0, moneyFilter:'all', owner:'', lastSync:null };
 const PEOPLE = ['Jakub','Jan'];
 const TYPES = [['web','Web'],['aplikace','Aplikace'],['eshop','E-shop'],['jine','Jiné']];
 const TYP = Object.fromEntries(TYPES);
@@ -436,12 +455,53 @@ $('#logout').onclick = logout; $('#logout2').onclick = logout;
 /* ---------- data ---------- */
 async function load(silent){
   try {
-    const d = await api('GET', '/api/all');
+    const [d, vis] = await Promise.all([api('GET', '/api/all'), api('GET', '/api/visits').catch(() => null)]);
+    if (vis) S.visits = vis;
     S.user = d.user; S.clients = d.clients; S.money = d.money; S.activity = d.activity; S.lastSync = new Date();
     if (!document.querySelector('dialog[open]')) render();
     else renderChrome();
   } catch (err) { if (!silent) toast(err.message, true); }
 }
+/* ---------- leady: návštěvy ze špióna a co udělat ---------- */
+const FOLLOWUP_DAYS = 3, MAX_FOLLOWUPS = 2;
+const slugN = s => String(s || '').toLowerCase().replace(/^https?:\/\//, '').split(/[./]/)[0].replace(/-/g, '');
+const nameN = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+function visitsOf(c){
+  const sl = slugN(c.preview), nm = nameN(c.name);
+  const vs = S.visits.filter(v => { const k = v.site.replace(/-/g, ''); return sl ? k === sl : (k.length > 5 && nm.startsWith(k)); });
+  const from = c.sent_date || '9999';
+  const after = vs.filter(v => v.t.slice(0,10) >= from);
+  const human = after.filter(v => v.trida === 'clovek' || v.trida === 'clovek2');
+  return { all: vs, after, human, last: human[0] || after[0] || null };
+}
+const daysSince = d => d ? Math.round((parse(today()) - parse(d.slice(0,10))) / 864e5) : 999;
+function leadState(c){
+  if (c.stage === 'studeny') return { k:'lead', t:'Lead', cls:'s-studeny' };
+  if (c.stage === 'novy') return { k:'hotovo', t:'Web hotový', cls:'s-novy' };
+  if (c.stage === 'odmitl') return { k:'odmitl', t:'Odmítl', cls:'s-odmitl' };
+  if (c.stage !== 'odeslano') return { k:'klient', t:ST[c.stage], cls:'s-' + c.stage };
+  const v = visitsOf(c), fu = +c.followups || 0;
+  const lastHuman = v.human[0] ? v.human[0].t.slice(0,10) : '';
+  if (lastHuman && (!c.last_call || lastHuman > c.last_call)) return { k:'zavolat', t:'Viděl web – zavolat', cls:'s-zavolat', v };
+  const lastContact = [c.sent_date, c.last_followup, c.last_call].filter(Boolean).sort().pop();
+  const ago = daysSince(lastContact);
+  if (fu < MAX_FOLLOWUPS && ago >= FOLLOWUP_DAYS) return { k:'followup', t:`Poslat ${fu + 1}. follow-up`, cls:'s-followup', v };
+  if (fu >= MAX_FOLLOWUPS && ago >= FOLLOWUP_DAYS) return { k:'ticho', t:'Bez reakce', cls:'s-odmitl', v };
+  return { k:'ceka', t: fu ? `Follow-up ${fu}× – čekáme` : 'Odesláno – čekáme', cls:'s-odeslano', v };
+}
+const BUCKETS = [
+  ['zavolat', 'Zavolat', 'viděli web, neozvali se'],
+  ['followup', 'Poslat follow-up', 'nic neviděli ani nenapsali'],
+  ['hotovo', 'Odeslat návrh', 'web je hotový'],
+  ['lead', 'Udělat web', 'lead bez webu'],
+];
+function lastNote(c){
+  const n = String(c.note || '').trim(); if (!n) return '';
+  const parts = n.split(/\n/).filter(Boolean);
+  const dated = parts.filter(x => /^\[\d{4}-\d\d-\d\d\]/.test(x));
+  return (dated.length ? dated[dated.length - 1].replace(/^\[\d{4}-(\d\d)-(\d\d)\]\s*/, (m, mo, d) => `${+d}. ${+mo}.: `) : parts[0]).slice(0, 140);
+}
+
 function upsert(list, row){ const i = list.findIndex(x => x.id === row.id); if (i >= 0) list[i] = row; else list.unshift(row); }
 const client = id => S.clients.find(c => c.id === +id);
 function actors(){
@@ -538,6 +598,9 @@ function vPrehled(v){
   const sentL = S.clients.filter(c => c.sent_date);
   const bounced = c => c.stage === 'odmitl' && /nedoruč|vrátil/i.test(c.note || '');
   const sent = sentL.filter(c => !bounced(c)).length;
+  const fSeen = sentL.filter(c => visitsOf(c).human.length).length;
+  const leadsNow = S.clients.filter(c => ['studeny','novy','odeslano'].includes(c.stage)).map(leadState);
+  const nZav = leadsNow.filter(x => x.k === 'zavolat').length, nFu = leadsNow.filter(x => x.k === 'followup').length;
   const fRep = sentL.filter(c => ['zajem','schuzka','pozdeji','nabidka','uzavreny'].includes(c.stage) || (c.stage === 'odmitl' && !bounced(c))).length;
   const fInt = sentL.filter(c => ['zajem','schuzka','nabidka','uzavreny'].includes(c.stage)).length;
   const fBuy = sentL.filter(c => c.stage === 'uzavreny').length;
@@ -554,10 +617,18 @@ function vPrehled(v){
     <div class="card kpi"><div class="lab">Prodané zakázky</div><div class="val">${closed.length}</div><div class="foot">${sold.length} placených · ${closed.length - sold.length} zdarma</div></div>
   </div>
 
+  <div class="flow mt">
+    <a class="flow-step f-zavolat" href="#leady" data-goto="zavolat"><span class="n">${nZav}</span><span class="t">Zavolat</span><span class="d">viděli web, neozvali se</span></a>
+    <a class="flow-step f-followup" href="#leady" data-goto="followup"><span class="n">${nFu}</span><span class="t">Poslat follow-up</span><span class="d">nic neviděli ani nenapsali</span></a>
+    <a class="flow-step f-hotovo" href="#leady" data-goto="hotovo"><span class="n">${S.clients.filter(c=>c.stage==='novy').length}</span><span class="t">Odeslat návrh</span><span class="d">web je hotový</span></a>
+    <a class="flow-step f-lead" href="#leady" data-goto="lead"><span class="n">${S.clients.filter(c=>c.stage==='studeny').length}</span><span class="t">Udělat web</span><span class="d">lead bez webu</span></a>
+  </div>
+
   <div class="card mt">
     <div class="card-h"><h2>Úspěšnost oslovení</h2><span class="muted" style="font-size:13px">firmy, kterým odešel návrh e-mailem</span></div>
-    <div class="funnel">
+    <div class="funnel five">
       <div class="fstep"><div class="lab">Odesláno</div><div class="big">${sent}</div><div class="foot">návrhů webu</div></div>
+      <div class="fstep"><div class="lab">Viděli web</div><div class="big">${pct(fSeen, sent)}</div><div class="foot">${fSeen} firem podle špióna</div><div class="fbar"><i style="width:${sent?fSeen/sent*100:0}%"></i></div></div>
       <div class="fstep"><div class="lab">Odpovědělo</div><div class="big">${pct(fRep, sent)}</div><div class="foot">${fRep} firem · z toho ${fNo} ne</div><div class="fbar"><i style="width:${sent?fRep/sent*100:0}%"></i></div></div>
       <div class="fstep"><div class="lab">Projevilo zájem</div><div class="big">${pct(fInt, sent)}</div><div class="foot">${fInt} firem · ${pct(fInt, fRep)} z odpovědí</div><div class="fbar"><i style="width:${sent?fInt/sent*100:0}%"></i></div></div>
       <div class="fstep win"><div class="lab">Koupilo</div><div class="big">${pct(fBuy, sent)}</div><div class="foot">${fBuy} firem · ${pct(fBuy, fInt)} ze zájemců</div><div class="fbar"><i style="width:${sent?fBuy/sent*100:0}%"></i></div></div>
@@ -566,7 +637,7 @@ function vPrehled(v){
 
   <div class="grid cols-2 mt">
     <div class="card">
-      <div class="card-h"><h2>Na řadě</h2><span class="muted" style="font-size:13px">komu napsat, zavolat, poslat follow-up</span></div>
+      <div class="card-h"><h2>Domluvené termíny</h2><span class="muted" style="font-size:13px">schůzky, slíbené hovory, připomenutí</span></div>
       ${todo.length ? `<ul class="todo">${(S.todoAll ? todo : todo.slice(0,8)).map(c => `<li>
         ${datePill(c.next_date)}
         <div class="t" data-open="${c.id}"><b>${esc(c.name)}</b><span>${esc(c.next_action || ST[c.stage])}${c.phone ? ' · ' + esc(c.phone) : ''}${c.owner ? ' · ' + esc(c.owner) : ''}</span></div>
@@ -660,37 +731,113 @@ function bindDnD(root){
 }
 
 function vLeady(v){
-  const all = S.clients.filter(c => ['studeny','novy','odeslano'].includes(c.stage));
+  const leads = S.clients.filter(c => ['studeny','novy','odeslano','odmitl'].includes(c.stage));
+  const st = new Map(leads.map(c => [c.id, leadState(c)]));
+  const cnt = k => leads.filter(c => st.get(c.id).k === k).length;
   const q = S.leadQ.trim().toLowerCase();
-  let list = S.clients.filter(c => S.leadFilter === 'all' ? ['studeny','novy','odeslano'].includes(c.stage) : S.leadFilter === 'vse' ? true : c.stage === S.leadFilter);
+  const f = S.leadFilter;
+  let list = leads.filter(c => {
+    const k = st.get(c.id).k;
+    if (f === 'akce') return ['zavolat','followup'].includes(k);
+    if (f === 'vse') return k !== 'odmitl';
+    if (f === 'odeslano') return ['ceka','zavolat','followup','ticho'].includes(k);
+    return k === f;
+  });
   if (S.leadBy) list = list.filter(c => c.made_by === S.leadBy);
   if (q) list = list.filter(c => [c.name,c.city,c.email,c.phone,c.person,c.preview,c.note].join(' ').toLowerCase().includes(q));
-  list.sort((a,b) => (b.sent_date||'0').localeCompare(a.sent_date||'0') || b.created_at.localeCompare(a.created_at));
+  const order = { zavolat:0, followup:1, ceka:2, ticho:3, hotovo:4, lead:5, odmitl:6 };
+  list.sort((a,b) => order[st.get(a.id).k] - order[st.get(b.id).k] || ((st.get(b.id).v?.last?.t)||'').localeCompare((st.get(a.id).v?.last?.t)||'') || (b.sent_date||'').localeCompare(a.sent_date||''));
   const makers = [...new Set(S.clients.map(c => c.made_by).filter(Boolean))];
-  const chips = [['all','Všechny leady', all.length], ['studeny','Studené', S.clients.filter(c=>c.stage==='studeny').length], ['novy','Hotové', S.clients.filter(c=>c.stage==='novy').length], ['odeslano','Odesláno', S.clients.filter(c=>c.stage==='odeslano').length], ['vse','Všichni klienti', S.clients.length]];
-  v.innerHTML = pageTop('Leady', 'Studené leady, hotové weby a odeslané návrhy. Když někdo odpoví, posuňte ho dál.', BTN_CLIENT) + `
-  <div class="card">
+  const chips = [['akce','Na řadě', cnt('zavolat') + cnt('followup')], ['odeslano','Odesláno', cnt('ceka') + cnt('zavolat') + cnt('followup') + cnt('ticho')],
+    ['hotovo','Web hotový', cnt('hotovo')], ['lead','Leady bez webu', cnt('lead')], ['ticho','Bez reakce', cnt('ticho')], ['odmitl','Odmítli', cnt('odmitl')], ['vse','Vše', leads.length - cnt('odmitl')]];
+
+  const actions = c => {
+    const s2 = st.get(c.id);
+    const tel = c.phone ? `<a class="btn sm gold" href="tel:${esc(c.phone.replace(/\s/g,''))}" data-stop>${esc(c.phone)}</a>` : '';
+    if (s2.k === 'lead') return `<button class="btn sm" data-stage-to="novy" data-id="${c.id}">Web je hotový</button>`;
+    if (s2.k === 'hotovo') return `<button class="btn sm" data-stage-to="odeslano" data-id="${c.id}">Odesláno</button>`;
+    if (s2.k === 'zavolat') return `${tel}<button class="btn sm" data-reply="${c.id}" data-mode="hovor">Jak dopadl hovor</button>`;
+    if (s2.k === 'odmitl') return '';
+    return `${s2.k === 'followup' ? `<button class="btn sm" data-fu="${c.id}">${ico('check',14)}Follow-up odeslán</button>` : ''}<button class="btn sm" data-reply="${c.id}" data-mode="mail">Odpověděl</button>`;
+  };
+  const seen = c => {
+    const x = st.get(c.id).v; if (!x || !x.after.length) return '<span class="muted">—</span>';
+    const h = x.human.length;
+    return `<span class="seen ${h ? 'yes' : ''}" title="${esc(x.after.map(v => `${new Date(v.t).toLocaleString('cs-CZ',{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'})} · ${v.verdikt}${v.detail ? ' · ' + v.detail : ''}`).join('\n'))}">${h ? `${ico('check',13)} viděl ${h}×` : `otevřeno ${x.after.length}×`}</span><div class="sub">${fd(x.after[0].t.slice(0,10))}</div>`;
+  };
+
+  v.innerHTML = pageTop('Leady', 'Od nalezené firmy po odpověď. Kdo odpoví se zájmem, přejde do Klientů.', BTN_CLIENT) + `
+  <div class="flow">
+    ${BUCKETS.map(([k,t,d]) => `<button class="flow-step ${f===k || (f==='akce' && (k==='zavolat'||k==='followup')) ? 'on' : ''} f-${k}" data-lf="${k}"><span class="n">${cnt(k)}</span><span class="t">${t}</span><span class="d">${d}</span></button>`).join('')}
+  </div>
+  <div class="card mt">
     <div class="toolbar">
-      <div class="chips">${chips.map(([k,t,n]) => `<button class="chip" data-lf="${k}" aria-pressed="${S.leadFilter===k}">${t}<span class="c">${n}</span></button>`).join('')}</div>
-      <input class="inp search" type="search" placeholder="Hledat firmu, město, e-mail…" value="${esc(S.leadQ)}" id="leadQ">
-      <select class="inp" id="leadBy"><option value="">Kdo dělal web: všichni</option>${makers.map(m => `<option ${S.leadBy===m?'selected':''}>${esc(m)}</option>`).join('')}</select>
+      <div class="chips">${chips.map(([k,t,n]) => `<button class="chip" data-lf="${k}" aria-pressed="${f===k}">${t}<span class="c">${n}</span></button>`).join('')}</div>
+      <input class="inp search" type="search" placeholder="Hledat firmu, město, telefon…" value="${esc(S.leadQ)}" id="leadQ">
+      <select class="inp" id="leadBy"><option value="">Web dělal: kdokoli</option>${makers.map(m => `<option ${S.leadBy===m?'selected':''}>${esc(m)}</option>`).join('')}</select>
     </div>
-    <div class="tbl-wrap"><table>
-      <thead><tr><th>Firma</th><th class="hide-m">Kontakt</th><th class="hide-m">Náhled</th><th>Stav</th><th class="hide-m">Odesláno</th><th class="hide-m">Web dělal</th><th class="hide-m"></th></tr></thead>
-      <tbody>${list.slice(0,400).map(c => `<tr data-open="${c.id}">
-        <td><div class="nm">${esc(c.name)}</div><div class="sub">${esc(c.city)}</div></td>
-        <td class="hide-m"><div>${esc(c.email)}</div><div class="sub">${esc(c.phone)}</div></td>
-        <td class="hide-m">${c.preview ? `<a href="${esc(href(c.preview))}" target="_blank" rel="noopener" data-stop>${esc(host(c.preview))}</a>` : '<span class="muted">—</span>'}</td>
-        <td><span class="stage s-${c.stage}">${ST[c.stage]}</span></td>
-        <td class="hide-m">${c.sent_date ? fd(c.sent_date) : '<span class="muted">—</span>'}</td>
-        <td class="hide-m">${esc(c.made_by)}</td>
-        <td class="num hide-m">${c.stage==='studeny' ? `<button class="btn sm" data-stage-to="novy" data-id="${c.id}">Web hotový</button>` : c.stage==='novy' ? `<button class="btn sm" data-stage-to="odeslano" data-id="${c.id}">Odesláno</button>` : c.stage==='odeslano' ? `<button class="btn sm" data-stage-to="zajem" data-id="${c.id}">Má zájem</button>` : ''}</td>
-      </tr>`).join('')}</tbody></table>
-      ${list.length ? '' : '<div class="empty">Nic tu není.</div>'}
+    <div class="tbl-wrap"><table class="leads">
+      <thead><tr><th>Firma</th><th>Stav</th><th class="hide-m">Návštěvy webu</th><th class="hide-m">Odesláno</th><th class="hide-m">Poslední zpráva</th><th class="num">Co udělat</th></tr></thead>
+      <tbody>${list.slice(0,400).map(c => { const s2 = st.get(c.id); return `<tr data-open="${c.id}">
+        <td><div class="nm">${esc(c.name)}</div><div class="sub">${esc(c.city)}${c.preview ? ` · <a href="${esc(href(c.preview))}?ja=1" target="_blank" rel="noopener" data-stop>náhled</a>` : ''}</div></td>
+        <td><span class="stage ${s2.cls}">${esc(s2.t)}</span></td>
+        <td class="hide-m">${seen(c)}</td>
+        <td class="hide-m">${c.sent_date ? fd(c.sent_date) : '<span class="muted">—</span>'}${+c.followups ? `<div class="sub">+ ${c.followups}× follow-up</div>` : ''}</td>
+        <td class="hide-m note-cell">${esc(lastNote(c)) || '<span class="muted">—</span>'}</td>
+        <td class="num"><div class="acts">${actions(c)}</div></td>
+      </tr>`; }).join('')}</tbody></table>
+      ${list.length ? '' : '<div class="empty">Tady teď nic není.</div>'}
     </div>
   </div>`;
   const qi = $('#leadQ'); qi.addEventListener('input', () => { S.leadQ = qi.value; const pos = qi.selectionStart; vLeady(v); const n = $('#leadQ'); n.focus(); n.setSelectionRange(pos,pos); });
   $('#leadBy').addEventListener('change', e => { S.leadBy = e.target.value; vLeady(v); });
+}
+
+/* odpověď na e-mail nebo výsledek hovoru – jedno okno */
+function openReply(c, mode){
+  const opts = [['zajem','Má zájem','s-zajem'],['schuzka','Domluvená schůzka','s-schuzka'],['pozdeji','Ozvat se později','s-pozdeji'],['odmitl','Nemá zájem','s-odmitl']]
+    .concat(mode === 'hovor' ? [['nezveda','Nezvedá','s-novy']] : []);
+  openDlg(`<form method="dialog" id="rf">
+    <div class="m-h"><h2>${mode === 'hovor' ? 'Hovor' : 'Odpověď'} – ${esc(c.name)}</h2><button type="button" class="icon-btn" data-close aria-label="Zavřít">${ico('x')}</button></div>
+    <div class="m-b">
+      ${mode === 'hovor' && c.phone ? `<div class="links"><a href="tel:${esc(c.phone.replace(/\s/g,''))}">Zavolat ${esc(c.phone)}</a>${c.person ? `<span class="muted" style="align-self:center;font-size:13px">${esc(c.person)}</span>` : ''}</div>` : ''}
+      <div class="stage-pick" role="radiogroup">${opts.map(([k,t,cl], i) => `<label><input type="radio" name="res" value="${k}" ${i===0?'checked':''}><span class="stage ${cl}">${t}</span></label>`).join('')}</div>
+      <div class="form-grid">
+        <label class="field" id="rDate"><span>Kdy se ozvat / schůzka</span><input class="inp" type="date" name="next_date" value="${addDays(today(), 7)}"></label>
+        <label class="field"><span>Co udělat</span><input class="inp" name="next_action" placeholder="např. zavolat, poslat cenu"></label>
+        <label class="field full"><span>${mode === 'hovor' ? 'Co řekl' : 'Co napsal'}</span><textarea class="inp" name="text" rows="2" placeholder="krátce, ať to druhý pochopí"></textarea></label>
+      </div>
+    </div>
+    <div class="m-f"><button type="button" class="btn" data-close>Zrušit</button><button class="btn gold" type="submit">Uložit</button></div>
+  </form>`);
+  const form = $('#rf');
+  const sync = () => { const r = form.res.value; $('#rDate').classList.toggle('hidden', !['schuzka','pozdeji','zajem'].includes(r)); };
+  form.addEventListener('change', sync); sync();
+  form.addEventListener('submit', async e => {
+    e.preventDefault();
+    const d = Object.fromEntries(new FormData(form)); const t = today();
+    const label = { zajem:'má zájem', schuzka:'domluvená schůzka', pozdeji:'ozvat se později', odmitl:'nemá zájem', nezveda:'nezvedá' }[d.res];
+    const line = `[${t}] ${mode === 'hovor' ? 'Hovor' : 'Odpověď'}: ${label}${d.text ? ' – ' + d.text : ''}`;
+    const patch = { note: ((c.note || '') + '\n' + line).trim() };
+    if (mode === 'hovor') patch.last_call = t;
+    if (d.res !== 'nezveda') patch.stage = d.res;
+    if (['zajem','schuzka','pozdeji'].includes(d.res)) { patch.next_date = d.next_date; patch.next_action = d.next_action || (d.res === 'schuzka' ? 'Schůzka' : d.res === 'pozdeji' ? 'Ozvat se' : 'Navázat'); }
+    if (d.res === 'odmitl') { patch.next_date = ''; patch.next_action = ''; }
+    try {
+      const r = await api('PATCH', '/api/clients/' + c.id, patch); upsert(S.clients, r);
+      if (mode === 'hovor') await logAct('hovor', 1, { client_id: c.id, note: c.name + ' – ' + label });
+      if (STAGE_KIND[r.stage] && r.stage !== c.stage) await logAct(STAGE_KIND[r.stage], 1, { client_id: c.id, note: c.name });
+      dlg.close(); toast(`${c.name}: ${label}`);
+    } catch (err) { toast(err.message, true); }
+  });
+}
+
+async function markFollowup(c){
+  try {
+    const r = await api('PATCH', '/api/clients/' + c.id, { followups: (+c.followups || 0) + 1, last_followup: today() });
+    upsert(S.clients, r); await logAct('followup', 1, { client_id: c.id, note: c.name });
+    toast(`${c.name}: follow-up zapsán`); render();
+  } catch (err) { toast(err.message, true); }
 }
 
 function vPenize(v){
@@ -800,6 +947,7 @@ function openClient(c = {}, preset = {}){
       </details>
       ${!isNew ? `<div class="sub-list"><div class="card-h" style="margin-bottom:4px"><h3>Platby</h3><button type="button" class="btn sm" data-act="client-money">${ico('plus',14)}Platba</button></div>
         ${pays.length ? pays.map(m => `<div class="row"><span>${fd(m.date)} · ${esc(m.label)} ${m.status==='ceka'?`<span class="date-pill late">dluží</span> <button type="button" class="btn sm" data-paid-in="${m.id}">${ico('check',14)}Zaplatil</button>`:''}</span><b>${m.kind==='vydaj'?'−':''}${kc(m.amount)}</b></div>`).join('') : '<div class="muted" style="font-size:14px">Zatím žádné.</div>'}
+        ${(() => { const x = visitsOf(c); return x.all.length ? `<h3 style="margin-top:14px">Návštěvy náhledu</h3>${x.all.slice(0,6).map(v => `<div class="row"><span>${new Date(v.t).toLocaleString('cs-CZ',{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'})} · ${esc(v.verdikt)}</span><span class="muted">${v.mobil ? 'mobil' : 'počítač'}</span></div>`).join('')}` : ''; })()}
         ${acts.length ? `<h3 style="margin-top:14px">Historie</h3>${acts.map(a => `<div class="row"><span>${fd(a.date)} · ${esc(KINDS[a.kind]||a.kind)}</span><span class="muted">${esc(a.actor)}</span></div>`).join('')}` : ''}
         <div class="muted" style="font-size:12.5px;margin-top:10px">Naposledy upravil ${esc(c.updated_by||'—')} · ${fd(c.updated_at)}</div></div>` : ''}
     </div>
@@ -920,7 +1068,7 @@ function openLog(){
 
 /* ---------- události ---------- */
 document.addEventListener('click', async e => {
-  const t = e.target.closest('[data-close],[data-act],[data-open],[data-done],[data-money],[data-paid],[data-stage-to],[data-lf],[data-mf],[data-own],[data-week],[data-del-act],[data-stop]');
+  const t = e.target.closest('[data-close],[data-act],[data-open],[data-done],[data-money],[data-paid],[data-stage-to],[data-lf],[data-mf],[data-own],[data-reply],[data-fu],[data-goto],[data-week],[data-del-act],[data-stop]');
   if (!t) return;
   if (t.hasAttribute('data-stop')) return;
   if (t.hasAttribute('data-close')) { dlg.close(); return; }
@@ -929,6 +1077,9 @@ document.addEventListener('click', async e => {
   if (t.dataset.act === 'new-log') return openLog();
   if (t.dataset.act === 'todo-all') { S.todoAll = !S.todoAll; return render(); }
   if (t.dataset.act === 'toggle-lost') { S.showLost = !S.showLost; return render(); }
+  if (t.dataset.goto) { S.leadFilter = t.dataset.goto; return; }
+  if (t.dataset.reply) { e.stopPropagation(); return openReply(client(t.dataset.reply), t.dataset.mode); }
+  if (t.dataset.fu) { e.stopPropagation(); return markFollowup(client(t.dataset.fu)); }
   if (t.dataset.stageTo) { e.stopPropagation(); return setStage(client(t.dataset.id), t.dataset.stageTo); }
   if (t.dataset.done) { const c = client(t.dataset.done); try { const r = await api('PATCH','/api/clients/'+c.id, { next_date:'', next_action:'' }); upsert(S.clients, r); toast('Vyřízeno – ' + c.name); render(); } catch (err) { toast(err.message, true); } return; }
   if (t.dataset.paid) { e.stopPropagation(); try { const r = await api('PATCH','/api/money/'+t.dataset.paid, { status:'zaplaceno' }); upsert(S.money, r); toast('Označeno jako zaplacené'); render(); } catch (err) { toast(err.message, true); } return; }

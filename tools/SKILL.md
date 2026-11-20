@@ -52,11 +52,23 @@ EOF
 | `uzavreny` | Uzavřený klient | prodáno: `price` + `platba` s datem |
 | `odmitl` | Odmítl / nevyšlo | odmítnutí, nedoručený e-mail (důvod do `add_note`) |
 
-`next_date` + `next_action` se ukazuje v „Na řadě“ – tam patří každý follow-up, hovor a připomenutí.
+## Odeslané návrhy: volat, nebo follow-up (počítá se samo)
+
+Aplikace u každé firmy ve fázi `odeslano` sama určí, co dál – podle špióna (návštěvy náhledu z navrhy-stats):
+- **Zavolat** = člověk viděl náhled po odeslání a firma se neozvala. Volá Jakub/Jan, ty nevoláš.
+- **Poslat follow-up** = nic neviděl ani nenapsal a od posledního kontaktu uplynuly 3 dny (max. 2 follow-upy).
+- Po 2 follow-upech bez reakce = „Bez reakce“.
+
+`crm.py fronta` vypíše oba seznamy (s telefony a e-maily). Odeslaný follow-up zapiš
+`{"klient": "...", "followup": true}` – zvýší počet, uloží datum a zapíše statistiku. Ruční úkol „poslat follow-up“
+do `next_date` nedávej, to aplikace hlídá sama.
+
+Odpověď firmy: `{"klient": "...", "stage": "zajem|schuzka|pozdeji|odmitl", "next_date": "...", "next_action": "...", "add_note": "Odpověď: co napsal"}`.
+Do `next_date` + `next_action` patří jen domluvené věci (schůzka, slíbený hovor, „ozvěte se v únoru“) – ukazují se v „Domluvené termíny“.
 
 ## Kontrola
 
-`crm.py find text`, `crm.py list --stage zajem`, `crm.py stats` (fáze, posledních 7 dní, kdo je na řadě).
+`crm.py fronta`, `crm.py find text`, `crm.py list --stage zajem`, `crm.py stats` (fáze, posledních 7 dní, domluvené termíny).
 Když `klient` vrátí „odpovídá víc klientům“, použij přesnější název nebo ID z výpisu.
 
 ## Pravidla
