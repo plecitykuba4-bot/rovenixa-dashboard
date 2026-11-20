@@ -769,8 +769,9 @@ function vLeady(v){
   if (q) list = list.filter(c => [c.name,c.city,c.email,c.phone,c.person,c.preview,c.note].join(' ').toLowerCase().includes(q));
   const order = { zavolat:0, followup:1, ceka:2, ticho:3, hotovo:4, lead:5, odmitl:6 };
   list.sort((a,b) => order[st.get(a.id).k] - order[st.get(b.id).k] || (st.get(a.id).due||'9').localeCompare(st.get(b.id).due||'9') || ((st.get(b.id).v?.last?.t)||'').localeCompare((st.get(a.id).v?.last?.t)||'') || (b.sent_date||'').localeCompare(a.sent_date||''));
-  const chips = [['akce','Na řadě', cnt('zavolat') + cnt('followup')], ['fu1','1. follow-up', cntN(1)], ['fu2','2. follow-up', cntN(2)], ['odeslano','Odesláno', cnt('ceka') + cnt('zavolat') + cnt('followup') + cnt('ticho')],
-    ['hotovo','Web hotový', cnt('hotovo')], ['lead','Leady bez webu', cnt('lead')], ['ticho','Bez reakce', cnt('ticho')], ['odmitl','Odmítli', cnt('odmitl')], ['vse','Vše', leads.length - cnt('odmitl')]];
+  const FU = ['followup','fu1','fu2'];
+  const chips = FU.includes(f) ? [['followup','Dnes a po termínu', cnt('followup')], ['fu1','Všechny 1. follow-upy', cntN(1)], ['fu2','Všechny 2. follow-upy', cntN(2)]] : [];
+  const MORE = [['odeslano','Odesláno – čekají'], ['ticho','Bez reakce'], ['odmitl','Odmítli'], ['vse','Všechny leady']];
 
   const actions = c => {
     const s2 = st.get(c.id);
@@ -789,13 +790,14 @@ function vLeady(v){
 
   v.innerHTML = pageTop('Leady', 'Od nalezené firmy po odpověď. Kdo odpoví se zájmem, přejde do Klientů.', BTN_CLIENT) + `
   <div class="flow">
-    ${BUCKETS.map(([k,t,d]) => `<button class="flow-step ${f===k || (f==='akce' && (k==='zavolat'||k==='followup')) ? 'on' : ''} f-${k}" data-lf="${k}"><span class="n">${cnt(k)}</span><span class="t">${t}</span><span class="d">${SHARED.includes(k) ? d + ' · volají oba' : `<span class="drawers">${DRAWERS.map(([m,n]) => `<span>${n} <b>${cntBy(k,m)}</b></span>`).join('')}</span>`}</span></button>`).join('')}
+    ${BUCKETS.map(([k,t,d]) => `<button class="flow-step ${f===k || (k==='followup' && (f==='fu1'||f==='fu2')) || (f==='akce' && (k==='zavolat'||k==='followup')) ? 'on' : ''} f-${k}" data-lf="${k}"><span class="n">${cnt(k)}</span><span class="t">${t}</span><span class="d">${SHARED.includes(k) ? d + ' · volají oba' : `<span class="drawers">${DRAWERS.map(([m,n]) => `<span>${n} <b>${cntBy(k,m)}</b></span>`).join('')}</span>`}</span></button>`).join('')}
   </div>
   <div class="chips mt" style="align-items:center"><span class="muted" style="font-size:13px;margin-right:4px">Šuplík:</span>${[['','Oba'],...DRAWERS.map(([m,n]) => [m, n + ' · ' + m])].map(([k,t]) => `<button class="chip" data-drawer="${k}" aria-pressed="${S.leadBy===k}">${t}</button>`).join('')}</div>
   <div class="card mt">
     <div class="toolbar">
-      <div class="chips">${chips.map(([k,t,n]) => `<button class="chip" data-lf="${k}" aria-pressed="${f===k}">${t}<span class="c">${n}</span></button>`).join('')}</div>
+      ${chips.length ? `<div class="chips">${chips.map(([k,t,n]) => `<button class="chip" data-lf="${k}" aria-pressed="${f===k}">${t}<span class="c">${n}</span></button>`).join('')}</div>` : ''}
       <input class="inp search" type="search" placeholder="Hledat firmu, město, telefon…" value="${esc(S.leadQ)}" id="leadQ">
+      <select class="inp" id="leadMore"><option value="">Další seznamy…</option>${MORE.map(([k,t]) => `<option value="${k}" ${f===k?'selected':''}>${t} (${k==='odeslano' ? cnt('ceka') + cnt('zavolat') + cnt('followup') + cnt('ticho') : k==='vse' ? leads.filter(inDrawer).length - cnt('odmitl') : cnt(k)})</option>`).join('')}</select>
     </div>
     <div class="tbl-wrap"><table class="leads">
       <thead><tr><th>Firma</th><th>Stav</th><th class="hide-m">Návštěvy webu</th><th class="hide-m">Odesláno</th><th class="hide-m">Poslední zpráva</th><th class="num">Co udělat</th></tr></thead>
@@ -810,6 +812,7 @@ function vLeady(v){
       ${list.length ? '' : '<div class="empty">Tady teď nic není.</div>'}
     </div>
   </div>`;
+  $('#leadMore').addEventListener('change', e => { S.leadFilter = e.target.value || 'akce'; vLeady(v); });
   const qi = $('#leadQ'); qi.addEventListener('input', () => { S.leadQ = qi.value; const pos = qi.selectionStart; vLeady(v); const n = $('#leadQ'); n.focus(); n.setSelectionRange(pos,pos); });
 }
 
@@ -1088,7 +1091,7 @@ function openLog(){
 
 /* ---------- události ---------- */
 document.addEventListener('click', async e => {
-  const t = e.target.closest('[data-close],[data-act],[data-open],[data-done],[data-money],[data-paid],[data-stage-to],[data-lf],[data-mf],[data-own],[data-reply],[data-fu],[data-goto],[data-week],[data-del-act],[data-stop]');
+  const t = e.target.closest('[data-close],[data-act],[data-open],[data-done],[data-money],[data-paid],[data-stage-to],[data-lf],[data-mf],[data-own],[data-drawer],[data-reply],[data-fu],[data-goto],[data-week],[data-del-act],[data-stop]');
   if (!t) return;
   if (t.hasAttribute('data-stop')) return;
   if (t.hasAttribute('data-close')) { dlg.close(); return; }

@@ -125,11 +125,20 @@ def resolve(clients, ref):
     return None
 
 
+SUPLIK = {'Jan': 'Claude 1', 'Jakub': 'Claude 2'}
+
+
 def change(clients, ref, fields, actor):
     """Upraví klienta; při změně fáze sám zapíše aktivitu a datum odeslání."""
     c = resolve(clients, ref)
     if not c:
         sys.exit(f'Klient „{ref}“ nenalezen')
+    # Šuplíky: follow-up, odeslání návrhu a hotový web smí zapsat jen Claude, jehož lead to je.
+    prace = fields.get('followup') or fields.get('stage') in ('novy', 'odeslano')
+    if prace and c.get('made_by') and c['made_by'] != actor and not fields.get('cizi'):
+        sys.exit(f"STOP: „{c['name']}“ je ze šuplíku {SUPLIK.get(c['made_by'], c['made_by'])}, ne tvého "
+                 f"({SUPLIK.get(actor, actor)}). Follow-up/odeslání/web dělá ten druhý Claude. "
+                 'Jen když to Kuba výslovně řekne: přidej "cizi": true.')
     b = {k: v for k, v in fields.items() if k in FIELDS and k != 'name' or (k == 'name' and fields.get('rename'))}
     if 'price' in b and str(b['price']).isdigit():
         b['price'] = int(b['price'])
