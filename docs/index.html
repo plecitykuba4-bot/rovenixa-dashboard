@@ -123,6 +123,7 @@ main{padding:28px clamp(16px,3vw,40px) 80px;min-width:0}
 /* fáze */
 .stage{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:650;border-radius:999px;padding:3px 10px;white-space:nowrap;background:var(--paper-2);color:var(--ink-2)}
 .stage::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor;opacity:.75}
+.s-studeny{background:#E6EBF0;color:#3E5566}
 .s-novy{color:#6B6154}.s-odeslano{background:#EFE8DA;color:#5E4A26}
 .s-zajem{background:var(--gold-bg);color:var(--gold)}
 .s-schuzka{background:#F3DFC0;color:#7A4A12}
@@ -133,7 +134,7 @@ main{padding:28px clamp(16px,3vw,40px) 80px;min-width:0}
 
 /* pruhy */
 .bars{display:grid;gap:10px}
-.bar-row{display:grid;grid-template-columns:150px 1fr 44px;align-items:center;gap:12px;font-size:14px}
+.bar-row{display:grid;grid-template-columns:210px 1fr 44px;align-items:center;gap:12px;font-size:14px}
 .bar-row .track{height:10px;border-radius:99px;background:var(--paper-2);overflow:hidden}
 .bar-row .fill{height:100%;border-radius:99px;background:var(--gold-2)}
 .bar-row .n{text-align:right;font-weight:650}
@@ -230,6 +231,13 @@ dialog::backdrop{background:rgba(35,28,16,.38);backdrop-filter:blur(2px)}
 .fbar i{display:block;height:100%;background:var(--gold-2);border-radius:9px}
 .fstep.win{background:var(--ok-bg);border-color:#CBDDBE}.fstep.win .fbar i{background:var(--ok)}
 @media (max-width:860px){.funnel{grid-template-columns:1fr 1fr}.fstep .big{font-size:24px}}
+.hc-cols{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:6px;height:220px}
+.hc-col{display:flex;flex-direction:column;min-width:0}
+.hc-bars{flex:1;display:flex;align-items:flex-end;justify-content:center;gap:4px;border-bottom:1px solid var(--line-2)}
+.hc-bar{width:min(30px,42%);border-radius:6px 6px 2px 2px;position:relative}
+.hc-v{position:absolute;bottom:100%;left:50%;transform:translateX(-50%);margin-bottom:4px;font-size:12.5px;font-weight:650;color:var(--ink-2);white-space:nowrap}
+.hc-lab{font-size:12.5px;color:var(--ink-3);text-align:center;padding-top:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media (max-width:860px){.hc-cols{height:190px;gap:3px}.hc-v{font-size:11px}.hc-lab{font-size:11px}}
 .s-typ{background:#EFE9DD;color:#5A4E3C}.s-typ::before{display:none}
 .pay-box{background:var(--gold-bg-2);border:1px solid var(--line);border-radius:14px;padding:12px 14px 2px;margin-bottom:14px}
 details.more{border-top:1px solid var(--line);margin-top:4px;padding-top:12px}
@@ -324,7 +332,8 @@ const API = (location.hostname === 'localhost' || location.hostname === '127.0.0
   ? new URLSearchParams(location.search).get('api') : 'https://rovenixa-crm.rovenixa.workers.dev';
 
 const STAGES = [
-  {k:'novy', t:'Web hotový'},
+  {k:'studeny', t:'Studený lead'},
+  {k:'novy', t:'Hotový web'},
   {k:'odeslano', t:'Návrh odeslán'},
   {k:'zajem', t:'Projevil zájem'},
   {k:'schuzka', t:'Domluvená schůzka'},
@@ -337,8 +346,8 @@ const ST = Object.fromEntries(STAGES.map(s => [s.k, s.t]));
 const ACTIVE = ['zajem','schuzka','pozdeji','nabidka'];
 const KINDS = {web:'Webů vytvořeno', odeslano:'Návrhů odesláno', followup:'Follow-upů', odpoved:'Odpovědí', hovor:'Telefonátů', schuzka:'Schůzek', uzavreno:'Uzavřeno'};
 const KIND_SHORT = {web:'Weby', odeslano:'Odesláno', followup:'Follow-up', odpoved:'Odpovědi', hovor:'Hovory', schuzka:'Schůzky', uzavreno:'Uzavřeno'};
-const BASE_ACTORS = ['Claude 1','Claude 2','Jakub','Jan'];
-const STAGE_KIND = {odeslano:'odeslano', zajem:'odpoved', schuzka:'schuzka', uzavreny:'uzavreno'};
+const BASE_ACTORS = ['Jakub','Jan'];
+const STAGE_KIND = {novy:'web', odeslano:'odeslano', zajem:'odpoved', schuzka:'schuzka', uzavreny:'uzavreno'};
 
 const I = {
   home:'<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/>',
@@ -466,7 +475,17 @@ function sumAct(from, to, filter = () => true){
   return out;
 }
 const income = (from='0000', to='9999') => S.money.filter(m => m.kind==='prijem' && m.status==='zaplaceno' && m.date>=from && m.date<=to).reduce((s,m)=>s+m.amount,0);
-const costs = (from='0000', to='9999') => S.money.filter(m => m.kind==='vydaj' && m.status==='zaplaceno' && m.date>=from && m.date<=to).reduce((s,m)=>s+m.amount,0);
+const FIXED_COST = 1000, FIXED_FROM = '2026-09';
+function fixedCosts(from, to){
+  const a = from.slice(0,7) > FIXED_FROM ? from.slice(0,7) : FIXED_FROM, nowM = today().slice(0,7);
+  const b = to.slice(0,7) < nowM ? to.slice(0,7) : nowM;
+  if (a > b) return 0;
+  const n = (+b.slice(0,4) - +a.slice(0,4)) * 12 + (+b.slice(5,7) - +a.slice(5,7)) + 1;
+  return n * FIXED_COST;
+}
+const costs = (from='0000', to='9999') => S.money.filter(m => m.kind==='vydaj' && m.status==='zaplaceno' && m.date>=from && m.date<=to).reduce((s,m)=>s+m.amount,0) + fixedCosts(from, to);
+const openDeals = () => S.clients.filter(c => ACTIVE.includes(c.stage));
+const openSum = () => openDeals().reduce((s,c) => s + (+c.price||0), 0);
 const pending = () => S.money.filter(m => m.kind==='prijem' && m.status==='ceka');
 function monthRange(offset=0){ const d = new Date(); d.setDate(1); d.setMonth(d.getMonth()+offset); const s = iso(d); d.setMonth(d.getMonth()+1); d.setDate(0); return [s, iso(d)]; }
 function delta(a, b, unit=''){ if (!b && !a) return '<span class="muted">beze změny</span>'; const d = a - b; if (!d) return '<span class="muted">stejně jako minule</span>';
@@ -474,7 +493,7 @@ function delta(a, b, unit=''){ if (!b && !a) return '<span class="muted">beze zm
 
 /* ---------- vykreslení ---------- */
 function renderChrome(){
-  const counts = { klienti: S.clients.filter(c => ACTIVE.includes(c.stage)).length, leady: S.clients.filter(c => ['novy','odeslano'].includes(c.stage)).length };
+  const counts = { klienti: S.clients.filter(c => ACTIVE.includes(c.stage)).length, leady: S.clients.filter(c => ['studeny','novy','odeslano'].includes(c.stage)).length };
   const navHtml = VIEWS.map(v => `<a href="#${v.k}" class="${S.view===v.k?'on':''}">${ico(v.i,19)}<span>${v.t}</span>${counts[v.k]!=null?`<span class="cnt">${counts[v.k]}</span>`:''}</a>`).join('');
   $('#nav').innerHTML = navHtml;
   $('#bnav').innerHTML = VIEWS.map(v => `<a href="#${v.k}" class="${S.view===v.k?'on':''}" aria-label="${v.t}">${ico(v.i,20)}<span>${v.t}</span></a>`).join('');
@@ -529,9 +548,9 @@ function vPrehled(v){
   v.innerHTML = pageTop(hello, new Date().toLocaleDateString('cs-CZ',{weekday:'long', day:'numeric', month:'long'}), BTN_CLIENT + BTN_MONEY + BTN_LOG) + `
   <div class="grid kpis">
     <div class="card kpi hl"><div class="lab">Obrat letos</div><div class="val">${kc(income(y))}</div><div class="foot">zisk ${kc(income(y) - costs(y))} po výdajích</div></div>
-    <div class="card kpi"><div class="lab">Tento měsíc</div><div class="val">${kc(income(m0s,m0e))}</div><div class="foot">${delta(income(m0s,m0e), income(m1s,m1e), 'kc')}</div></div>
+    <div class="card kpi"><div class="lab">Tento měsíc</div><div class="val">${kc(income(m0s,m0e))}</div><div class="foot">přijato v ${['lednu','únoru','březnu','dubnu','květnu','červnu','červenci','srpnu','září','říjnu','listopadu','prosinci'][new Date().getMonth()]}</div></div>
     <div class="card kpi"><div class="lab">Čeká na zaplacení</div><div class="val">${kc(pendSum)}</div><div class="foot">${pend.length ? pend.length + (pend.length===1?' platba':' plateb') : 'nikdo nedluží'}</div></div>
-    <div class="card kpi"><div class="lab">Rozjednaní klienti</div><div class="val">${active.length}</div><div class="foot">${closed.length} uzavřených celkem</div></div>
+    <div class="card kpi"><div class="lab">Rozjednáno</div><div class="val">${kc(openSum())}</div><div class="foot">${active.length} klientů · na platbu čeká ${kc(S.clients.filter(c=>c.stage==='nabidka').reduce((t,c)=>t+(+c.price||0),0))}</div></div>
     <div class="card kpi"><div class="lab">Prodané zakázky</div><div class="val">${closed.length}</div><div class="foot">${sold.length} placených · ${closed.length - sold.length} zdarma</div></div>
   </div>
 
@@ -548,11 +567,11 @@ function vPrehled(v){
   <div class="grid cols-2 mt">
     <div class="card">
       <div class="card-h"><h2>Na řadě</h2><span class="muted" style="font-size:13px">komu napsat, zavolat, poslat follow-up</span></div>
-      ${todo.length ? `<ul class="todo">${todo.map(c => `<li>
+      ${todo.length ? `<ul class="todo">${(S.todoAll ? todo : todo.slice(0,8)).map(c => `<li>
         ${datePill(c.next_date)}
         <div class="t" data-open="${c.id}"><b>${esc(c.name)}</b><span>${esc(c.next_action || ST[c.stage])}${c.phone ? ' · ' + esc(c.phone) : ''}${c.owner ? ' · ' + esc(c.owner) : ''}</span></div>
         <button class="btn sm" data-done="${c.id}" title="Vyřízeno">${ico('check',15)}<span class="hide-m">Vyřízeno</span></button>
-      </li>`).join('')}</ul>` : `<div class="empty">Nic naplánovaného. Datum „Ozvat se“ nastavíte v kartě klienta.</div>`}
+      </li>`).join('')}</ul>${todo.length > 8 ? `<button class="btn sm ghost" data-act="todo-all" style="margin-top:8px">${S.todoAll ? 'Zobrazit méně' : `Zobrazit všechny (${todo.length})`}</button>` : ''}` : `<div class="empty">Nic naplánovaného. Datum „Ozvat se“ nastavíte v kartě klienta.</div>`}
       ${pend.length ? `<div class="sub-list"><h3>Kdo má zaplatit</h3>${pend.map(m => `<div class="row" style="cursor:pointer" data-money="${m.id}"><span>${esc(m.label || client(m.client_id)?.name || 'Platba')}<span class="muted"> · od ${fd(m.date)}</span></span><b>${kc(m.amount)}</b></div>`).join('')}</div>` : ''}
     </div>
     <div class="card">
@@ -582,30 +601,23 @@ function vPrehled(v){
   </div>`;
 }
 
+function barChart(groups, series, fmt = v => v){
+  const mx = Math.max(1, ...groups.flatMap(g => g.values));
+  return `<div class="hchart" role="img" aria-label="${esc(series.map(x => x.name).join(', '))}"><div class="hc-cols">${groups.map(g => `<div class="hc-col">
+    <div class="hc-bars">${g.values.map((v,i) => `<div class="hc-bar" style="height:${v ? Math.max(3, v/mx*82) : 0}%;background:${series[i].color}" title="${esc(g.label)}: ${esc(fmt(v))} ${esc(series[i].name)}">${v ? `<span class="hc-v">${fmt(v)}</span>` : ''}</div>`).join('')}</div>
+    <div class="hc-lab">${g.label}</div></div>`).join('')}</div></div>`;
+}
 function weeksChart(n){
-  const wk = monday(today()); const W = 640, H = 210, pl = 30, pb = 28, pt = 10;
-  const data = []; for (let i = n-1; i >= 0; i--) { const s = addDays(wk, -7*i); const a = sumAct(s, addDays(s,6)); data.push({ s, web:a.web, od:a.odeslano }); }
-  const mx = Math.max(4, ...data.map(d => Math.max(d.web, d.od))); const step = Math.ceil(mx/4);
-  const top = step*4, cw = (W-pl)/n, bw = Math.min(16, cw/3.2), y = v => pt + (H-pt-pb)*(1-v/top);
-  let g = ''; for (let i = 0; i <= 4; i++){ const v = step*i; g += `<line x1="${pl}" x2="${W}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)" stroke-dasharray="${i?'3 4':''}"/><text x="${pl-8}" y="${y(v)+4}" text-anchor="end">${v}</text>`; }
-  data.forEach((d,i) => { const cx = pl + cw*i + cw/2;
-    g += `<rect x="${cx-bw-2}" y="${y(d.web)}" width="${bw}" height="${y(0)-y(d.web)}" rx="4" fill="var(--gold-3)"><title>${fd(d.s)}: ${d.web} webů</title></rect>`;
-    g += `<rect x="${cx+2}" y="${y(d.od)}" width="${bw}" height="${y(0)-y(d.od)}" rx="4" fill="var(--gold)"><title>${fd(d.s)}: ${d.od} odesláno</title></rect>`;
-    g += `<text x="${cx}" y="${H-8}" text-anchor="middle">${fd(d.s)}</text>`; });
-  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Týdenní počty webů a odeslaných návrhů">${g}</svg>`;
+  const wk = monday(today()); const groups = [];
+  for (let i = n-1; i >= 0; i--) { const s = addDays(wk, -7*i); const a = sumAct(s, addDays(s,6)); groups.push({ label: fd(s), values: [a.web, a.odeslano] }); }
+  return barChart(groups, [{name:'webů', color:'var(--gold-3)'}, {name:'odesláno', color:'var(--gold)'}]);
 }
 function monthsChart(n){
-  const W = 900, H = 200, pl = 70, pb = 28, pt = 10; const data = [];
-  for (let i = n-1; i >= 0; i--) { const [s,e] = monthRange(-i); data.push({ s, inc: income(s,e), cost: costs(s,e) }); }
-  const mx = Math.max(10000, ...data.map(d => Math.max(d.inc, d.cost))); const step = Math.ceil(mx/4/1000)*1000; const top = step*4;
-  const cw = (W-pl)/n, bw = Math.min(34, cw/3), y = v => pt + (H-pt-pb)*(1-v/top);
-  let g = ''; for (let i = 0; i <= 4; i++){ const v = step*i; g += `<line x1="${pl}" x2="${W}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)" stroke-dasharray="${i?'3 4':''}"/><text x="${pl-8}" y="${y(v)+4}" text-anchor="end">${(v/1000)|0} tis.</text>`; }
-  data.forEach((d,i) => { const cx = pl + cw*i + cw/2, m = parse(d.s).getMonth();
-    g += `<rect x="${cx-bw-2}" y="${y(d.inc)}" width="${bw}" height="${y(0)-y(d.inc)}" rx="5" fill="var(--gold-2)"><title>${MONTHS[m]}: příjmy ${kc(d.inc)}</title></rect>`;
-    g += `<rect x="${cx+2}" y="${y(d.cost)}" width="${bw}" height="${y(0)-y(d.cost)}" rx="5" fill="var(--line-2)"><title>${MONTHS[m]}: výdaje ${kc(d.cost)}</title></rect>`;
-    if (d.inc) g += `<text x="${cx-bw/2-2}" y="${y(d.inc)-6}" text-anchor="middle" style="fill:var(--ink-2);font-weight:600">${Math.round(d.inc/1000)}k</text>`;
-    g += `<text x="${cx}" y="${H-8}" text-anchor="middle">${MONTHS[m]}</text>`; });
-  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Příjmy a výdaje po měsících">${g}</svg><div class="legend" style="margin-top:8px"><span><i style="background:var(--gold-2)"></i>příjmy</span><span><i style="background:var(--line-2)"></i>výdaje</span></div>`;
+  const groups = [];
+  for (let i = n-1; i >= 0; i--) { const [s,e] = monthRange(-i); groups.push({ label: MONTHS[parse(s).getMonth()], values: [income(s,e), costs(s,e)] }); }
+  const k = v => v >= 1000 ? (Math.round(v/100)/10).toLocaleString('cs-CZ') + ' tis.' : v + ' Kč';
+  return barChart(groups, [{name:'příjmy', color:'var(--gold-2)'}, {name:'výdaje', color:'var(--line-2)'}], k) +
+    `<div class="legend" style="margin-top:10px"><span><i style="background:var(--gold-2)"></i>příjmy</span><span><i style="background:var(--line-2)"></i>výdaje</span></div>`;
 }
 
 function kcard(c){
@@ -648,15 +660,15 @@ function bindDnD(root){
 }
 
 function vLeady(v){
-  const all = S.clients.filter(c => ['novy','odeslano'].includes(c.stage));
+  const all = S.clients.filter(c => ['studeny','novy','odeslano'].includes(c.stage));
   const q = S.leadQ.trim().toLowerCase();
-  let list = S.clients.filter(c => S.leadFilter === 'all' ? ['novy','odeslano'].includes(c.stage) : S.leadFilter === 'vse' ? true : c.stage === S.leadFilter);
+  let list = S.clients.filter(c => S.leadFilter === 'all' ? ['studeny','novy','odeslano'].includes(c.stage) : S.leadFilter === 'vse' ? true : c.stage === S.leadFilter);
   if (S.leadBy) list = list.filter(c => c.made_by === S.leadBy);
   if (q) list = list.filter(c => [c.name,c.city,c.email,c.phone,c.person,c.preview,c.note].join(' ').toLowerCase().includes(q));
   list.sort((a,b) => (b.sent_date||'0').localeCompare(a.sent_date||'0') || b.created_at.localeCompare(a.created_at));
   const makers = [...new Set(S.clients.map(c => c.made_by).filter(Boolean))];
-  const chips = [['all','Otevřené leady', all.length], ['novy','Web hotový', S.clients.filter(c=>c.stage==='novy').length], ['odeslano','Odesláno', S.clients.filter(c=>c.stage==='odeslano').length], ['vse','Všichni', S.clients.length]];
-  v.innerHTML = pageTop('Leady', 'Firmy, kterým jsme udělali náhled webu. Když někdo odpoví, posuňte ho dál.', BTN_CLIENT) + `
+  const chips = [['all','Všechny leady', all.length], ['studeny','Studené', S.clients.filter(c=>c.stage==='studeny').length], ['novy','Hotové', S.clients.filter(c=>c.stage==='novy').length], ['odeslano','Odesláno', S.clients.filter(c=>c.stage==='odeslano').length], ['vse','Všichni klienti', S.clients.length]];
+  v.innerHTML = pageTop('Leady', 'Studené leady, hotové weby a odeslané návrhy. Když někdo odpoví, posuňte ho dál.', BTN_CLIENT) + `
   <div class="card">
     <div class="toolbar">
       <div class="chips">${chips.map(([k,t,n]) => `<button class="chip" data-lf="${k}" aria-pressed="${S.leadFilter===k}">${t}<span class="c">${n}</span></button>`).join('')}</div>
@@ -672,7 +684,7 @@ function vLeady(v){
         <td><span class="stage s-${c.stage}">${ST[c.stage]}</span></td>
         <td class="hide-m">${c.sent_date ? fd(c.sent_date) : '<span class="muted">—</span>'}</td>
         <td class="hide-m">${esc(c.made_by)}</td>
-        <td class="num hide-m">${c.stage==='novy' ? `<button class="btn sm" data-stage-to="odeslano" data-id="${c.id}">Odesláno</button>` : c.stage==='odeslano' ? `<button class="btn sm" data-stage-to="zajem" data-id="${c.id}">Má zájem</button>` : ''}</td>
+        <td class="num hide-m">${c.stage==='studeny' ? `<button class="btn sm" data-stage-to="novy" data-id="${c.id}">Web hotový</button>` : c.stage==='novy' ? `<button class="btn sm" data-stage-to="odeslano" data-id="${c.id}">Odesláno</button>` : c.stage==='odeslano' ? `<button class="btn sm" data-stage-to="zajem" data-id="${c.id}">Má zájem</button>` : ''}</td>
       </tr>`).join('')}</tbody></table>
       ${list.length ? '' : '<div class="empty">Nic tu není.</div>'}
     </div>
@@ -689,9 +701,10 @@ function vPenize(v){
   v.innerHTML = pageTop('Peníze', 'Příjmy, výdaje a kdo ještě nezaplatil.', `<button class="btn gold" data-act="new-money">${ico('plus',16)}Platba</button>`) + `
   <div class="grid kpis">
     <div class="card kpi hl"><div class="lab">Přijato celkem</div><div class="val">${kc(income())}</div><div class="foot">letos ${kc(income(y))}</div></div>
-    <div class="card kpi"><div class="lab">Výdaje celkem</div><div class="val">${kc(costs())}</div><div class="foot">letos ${kc(costs(y))}</div></div>
+    <div class="card kpi"><div class="lab">Výdaje celkem</div><div class="val">${kc(costs())}</div><div class="foot">vč. 1 000 Kč měsíčně od září</div></div>
     <div class="card kpi"><div class="lab">Zisk</div><div class="val">${kc(income() - costs())}</div><div class="foot">tento měsíc ${kc(income(m0s,m0e) - costs(m0s,m0e))}</div></div>
     <div class="card kpi"><div class="lab">Čeká na zaplacení</div><div class="val">${kc(pend.reduce((s,m)=>s+m.amount,0))}</div><div class="foot">${pend.length} plateb</div></div>
+    <div class="card kpi"><div class="lab">Rozjednáno</div><div class="val">${kc(openSum())}</div><div class="foot">${openDeals().length} klientů v jednání</div></div>
     <div class="card kpi"><div class="lab">Průměrná zakázka</div><div class="val">${(() => { const cl = S.clients.filter(c => c.stage==='uzavreny' && c.price); return cl.length ? kc(cl.reduce((s,c)=>s+c.price,0)/cl.length) : '—'; })()}</div><div class="foot">z uzavřených klientů</div></div>
   </div>
   <div class="card mt">
@@ -914,6 +927,7 @@ document.addEventListener('click', async e => {
   if (t.dataset.act === 'new-client') return openClient({}, t.dataset.stage ? { stage: t.dataset.stage } : {});
   if (t.dataset.act === 'new-money') return openMoney();
   if (t.dataset.act === 'new-log') return openLog();
+  if (t.dataset.act === 'todo-all') { S.todoAll = !S.todoAll; return render(); }
   if (t.dataset.act === 'toggle-lost') { S.showLost = !S.showLost; return render(); }
   if (t.dataset.stageTo) { e.stopPropagation(); return setStage(client(t.dataset.id), t.dataset.stageTo); }
   if (t.dataset.done) { const c = client(t.dataset.done); try { const r = await api('PATCH','/api/clients/'+c.id, { next_date:'', next_action:'' }); upsert(S.clients, r); toast('Vyřízeno – ' + c.name); render(); } catch (err) { toast(err.message, true); } return; }

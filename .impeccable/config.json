@@ -1,0 +1,14 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "overused-font",
+        "value": "instrument sans",
+        "createdAt": "2026-11-20T14:03:56.364Z",
+        "reason": "Claude: brand body font of rovenixa.com, dashboard must match the studio site (user asked for same design as our web)"
+      }
+    ]
+  }
+}
