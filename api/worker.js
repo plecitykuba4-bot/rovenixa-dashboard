@@ -1,5 +1,5 @@
 // Rovenixa CRM API – Cloudflare Worker + D1
-// Secrets: PASS_JAKUB, PASS_JAN, CLAUDE_KEY, TOKEN_SECRET, SPY_URL, MAIL_KEY (Gmail Apps Script)
+// Secrets: PASS_JAKUB, PASS_JAN, CLAUDE_KEY, TOKEN_SECRET, SPY_URL, MAIL_KEY (Gmail Apps Script), GEMINI_KEY (hlasový souhrn)
 
 const TABLES = {
   clients: ['name', 'person', 'phone', 'email', 'city', 'web', 'preview', 'stage', 'price',
@@ -30,6 +30,18 @@ function safeEq(a, b) {
   let r = 0;
   for (let i = 0; i < a.length; i++) r |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return r === 0;
+}
+
+// Holé PCM (16 bit, mono) od Gemini → WAV, aby ho prohlížeč přehrál.
+function pcmToWav(pcm, rate) {
+  const h = new DataView(new ArrayBuffer(44));
+  const s = (o, t) => [...t].forEach((c, i) => h.setUint8(o + i, c.charCodeAt(0)));
+  s(0, 'RIFF'); h.setUint32(4, 36 + pcm.length, true); s(8, 'WAVE'); s(12, 'fmt ');
+  h.setUint32(16, 16, true); h.setUint16(20, 1, true); h.setUint16(22, 1, true);
+  h.setUint32(24, rate, true); h.setUint32(28, rate * 2, true); h.setUint16(32, 2, true); h.setUint16(34, 16, true);
+  s(36, 'data'); h.setUint32(40, pcm.length, true);
+  const out = new Uint8Array(44 + pcm.length); out.set(new Uint8Array(h.buffer)); out.set(pcm, 44);
+  return out;
 }
 
 const norm = (s) => String(s || '').replace(/\s+/g, '').toLowerCase();
@@ -151,6 +163,42 @@ export default {
       if (!user) return json(req, { error: 'Nepřihlášen' }, 401);
 
       if (p === '/api/me') return json(req, { user });
+
+      // Hlasový souhrn: text složí dashboard, tady z něj Gemini udělá řeč (hlas Charon).
+      // Vlastní TTS modely, ne ten z reelů (gemini-3.8-flash-tts), ať se nežere jejich denní limit.
+      if (p === '/api/tts' && req.method === 'POST') {
+        if (!env.GEMINI_KEY) return json(req, { error: 'Hlas není nastavený' }, 503);
+        const text = String((await req.json()).text || '').trim().slice(0, 2500);
+        if (!text) return json(req, { error: 'Prázdný text' }, 400);
+        const voice = 'Charon';
+        const hash = b64u(await crypto.subtle.digest('SHA-256', enc.encode(voice + '|' + text)));
+        const ck = new Request('https://cache.local/tts/' + hash);
+        const audioRes = (buf) => new Response(buf, { headers: { ...cors(req), 'Content-Type': 'audio/wav', 'Cache-Control': 'private, max-age=86400' } });
+        const hit = await caches.default.match(ck);
+        if (hit) return audioRes(await hit.arrayBuffer());
+        const prompt = 'Read this as a short, warm daily briefing in standard Czech (cs-CZ), native Prague accent, '
+          + 'natural Czech vowel lengths, calm friendly pace, never Slovak, never a foreign accent. Read only the text:\n\n' + text;
+        let last = '';
+        for (const model of ['gemini-3.8-flash-lite-tts', 'gemini-3.1-flash-tts-preview', 'gemini-2.5-flash-preview-tts']) {
+          const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-goog-api-key': env.GEMINI_KEY },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: prompt }] }],
+              generationConfig: { responseModalities: ['AUDIO'], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } } },
+            }),
+          });
+          if (!r.ok) { last = `${model} ${r.status}`; continue; }
+          const d = await r.json();
+          const part = (d.candidates?.[0]?.content?.parts || []).find((x) => x.inlineData);
+          if (!part) { last = `${model} bez zvuku`; continue; }
+          let bytes = Uint8Array.from(atob(part.inlineData.data), (ch) => ch.charCodeAt(0));
+          if (!/wav/i.test(part.inlineData.mimeType || '')) bytes = pcmToWav(bytes, Number((/rate=(\d+)/.exec(part.inlineData.mimeType || '') || [])[1]) || 24000);
+          await caches.default.put(ck, new Response(bytes, { headers: { 'Cache-Control': 'max-age=604800' } }));
+          return audioRes(bytes);
+        }
+        return json(req, { error: 'Hlas teď nejde (' + last + ')' }, 502);
+      }
 
       // Návštěvy náhledů ze „špióna“ (navrhy-stats) – klíč je jen v secretu SPY_URL
       if (p === '/api/visits' && req.method === 'GET') {

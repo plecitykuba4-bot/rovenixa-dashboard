@@ -262,6 +262,13 @@ table.leads td{vertical-align:top}
 .fu-done .row{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-top:1px solid var(--line);cursor:pointer}
 .replies{border-color:var(--ok);padding:14px 18px}
 .row.visit{align-items:flex-start}.row.visit .vd{display:block;font-size:12.5px;color:var(--ink-3);font-weight:400}.row.visit.clovek b,.row.visit.clovek2 b{color:var(--ok)}.row.visit.robot b{color:var(--ink-3);font-weight:500}
+.brief{display:flex;gap:16px;align-items:flex-start;padding:16px 20px}
+.brief-btn{flex:none;width:52px;height:52px;border-radius:50%;border:0;background:var(--gold);color:#FFFDF9;display:grid;place-items:center;cursor:pointer;transition:background .15s,transform .15s}
+.brief-btn:hover{background:var(--gold-2)}.brief-btn:active{transform:scale(.96)}.brief-btn:focus-visible{outline:2px solid var(--gold-3);outline-offset:3px}
+.brief-t{display:flex;flex-direction:column;gap:2px;min-width:0;padding-top:5px}.brief-t .muted{font-size:14px}
+.brief details{margin-top:8px;font-size:14px}.brief summary{cursor:pointer;color:var(--ink-2)}.brief .tx{white-space:pre-line;color:var(--ink-2);margin-top:6px;line-height:1.55}
+.spin{width:20px;height:20px;border:2px solid rgba(255,253,249,.35);border-top-color:#FFFDF9;border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}@media (prefers-reduced-motion:reduce){.spin{animation-duration:2.4s}}
 .reply-box{background:var(--paper-2);border-radius:10px;padding:10px 14px;margin:2px 0 14px;white-space:pre-line;font-size:14px;line-height:1.5}.reply-box .rb-h{font-size:12.5px;color:var(--ink-3);margin-bottom:4px;white-space:normal}.rp-h{margin-bottom:6px}
 .rp{display:flex;gap:14px;justify-content:space-between;align-items:flex-start;padding:10px 0;border-top:1px solid var(--line)}
 .rp-t{cursor:pointer;min-width:0}.rp-x{font-size:13.5px;color:var(--ink-2);margin-top:3px;white-space:pre-line}
@@ -536,6 +543,104 @@ function repliesBox(full){
       <div class="acts">${c.reply_link ? `<a class="btn sm" href="${esc(c.reply_link)}" target="_blank" rel="noopener">Otevřít mail</a>` : ''}<button class="btn sm gold" data-reply="${c.id}" data-mode="mail">Zařadit</button><button class="btn sm" data-seen-reply="${c.id}" title="Jen označit jako přečtené, nic neměnit">Přečteno</button></div>
     </div>`).join('')}${!full && xs.length > 5 ? `<a class="muted" href="#leady" style="font-size:13px">… a další ${xs.length - 5} na Leadech</a>` : ''}</div>`;
 }
+/* ---------- hlasový souhrn: text se složí z dat, Worker z něj udělá řeč (Gemini, hlas Charon) ---------- */
+const BRIEF = { state:'idle', text:'', audio:null };
+const pl = (n, a, b, c) => `${n} ${n === 1 ? a : n >= 2 && n <= 4 ? b : c}`;
+const joinAnd = xs => xs.length < 2 ? (xs[0] || '') : xs.slice(0, -1).join(', ') + ' a ' + xs[xs.length - 1];
+const sayName = s => String(s || '').replace(/\s*\(.*?\)/g, '').replace(/[,\s]*(spol\.\s*s\s*r\.\s*o\.|s\.\s*r\.\s*o\.|a\.\s*s\.|z\.\s*s\.|v\.\s*o\.\s*s\.)\s*$/i, '').trim();
+const MON_G = ['ledna','února','března','dubna','května','června','července','srpna','září','října','listopadu','prosince'];
+const WD_G = ['neděle','pondělí','úterý','středy','čtvrtka','pátku','soboty'];
+const sayDate = s => { if (s === today()) return 'dnes'; if (s === addDays(today(), 1)) return 'zítra'; const d = parse(s); return `${d.getDate()}. ${MON_G[d.getMonth()]}${d.getFullYear() !== new Date().getFullYear() ? ' ' + d.getFullYear() : ''}`; };
+const gist = t => { let s = String(t || '').replace(/\s+/g, ' ').replace(/^\s*(dobrý den|dobry den|dobrý večer|zdravím|zdravim|ahoj)[\s,.!]*/i, '').trim();
+  const end = s.search(/[\s.,!](s pozdravem|se srdečným pozdravem|mockrát děkuj\w*|děkuji předem|hezký den|pěkný den|mějte se)/i);
+  if (end > 15) s = s.slice(0, end + 1).trim();
+  let o = ''; for (const x of s.match(/[^.!?]+[.!?]*/g) || []) { if (o && (o + x).length > 230) break; o += x; }
+  o = (o || s).trim().slice(0, 260); return o.charAt(0).toUpperCase() + o.slice(1); };
+const ACT_SAY = { web:['hotový web','hotové weby','hotových webů'], odeslano:['odeslaný návrh','odeslané návrhy','odeslaných návrhů'],
+  followup:['follow-up','follow-upy','follow-upů'], hovor:['telefonát','telefonáty','telefonátů'], odpoved:['zapsaná odpověď','zapsané odpovědi','zapsaných odpovědí'],
+  schuzka:['domluvená schůzka','domluvené schůzky','domluvených schůzek'], uzavreno:['uzavřená zakázka','uzavřené zakázky','uzavřených zakázek'] };
+const STAGE_SAY = { zajem:'má zájem', schuzka:'má domluvenou schůzku', pozdeji:'se má ozvat později' };
+
+function briefText(){
+  const t = today(), yest = addDays(t, -1), h = new Date().getHours();
+  let since = (store.get('rx_brief_' + S.user) || '').slice(0, 10);
+  if (!since || since < addDays(t, -7)) since = yest;
+  const when = since === t ? 'Dnes zatím' : since === yest ? 'Od včerejška' : 'Od ' + WD_G[parse(since).getDay()];
+  const other = S.user === 'Jan' ? 'Jakub' : 'Jan', otherG = { Jan:'Honzy', Jakub:'Kuby' }[other];
+  const did = actor => { const s = sumAct(since, t, a => a.actor === actor); return joinAnd(Object.entries(ACT_SAY).filter(([k]) => s[k]).map(([k, w]) => pl(s[k], ...w))); };
+  const out = [(h < 10 ? 'Dobré ráno' : h < 18 ? 'Ahoj' : 'Dobrý večer') + ', ' + (vocative[S.user] || S.user) + '. Tady je souhrn.'];
+
+  const me = did(S.user), ot = did(other);
+  if (me) out.push(`${when} je u tebe zapsáno: ${me}.`);
+  if (ot) out.push(`${me ? 'U' : when + ' u'} ${otherG}: ${ot}.`);
+  if (!me && !ot) out.push(`${when} se do evidence nic nového nezapsalo.`);
+
+  const fresh = S.clients.filter(c => +c.reply_new).sort((a, b) => (b.reply_at || '').localeCompare(a.reply_at || ''));
+  if (fresh.length) {
+    const n = fresh.length;
+    out.push(n === 1 ? 'Odepsala jedna firma.' : n <= 4 ? `Odepsaly ${n} firmy.` : `Odepsalo ${n} firem.`);
+    fresh.slice(0, 4).forEach(c => out.push(`${sayName(c.name)} píše: ${gist(c.reply_text)}`));
+    if (n > 4) out.push(`A ${pl(n - 4, 'další', 'další', 'dalších')} najdeš v pruhu Odepsali.`);
+    out.push(n === 1 ? 'Zařaď ji prosím v pruhu Odepsali.' : 'Zařaď je prosím v pruhu Odepsali.');
+  }
+  const warm = S.clients.filter(c => !+c.reply_new && c.reply_at && c.reply_at.slice(0, 10) >= since && STAGE_SAY[c.stage]);
+  warm.slice(0, 3).forEach(c => out.push(`${sayName(c.name)} ${STAGE_SAY[c.stage]}${c.next_action ? ': ' + c.next_action : ''}${c.next_date ? ', termín ' + sayDate(c.next_date) : ''}.`));
+
+  const leads = S.clients.filter(c => ['studeny','novy','odeslano'].includes(c.stage)).map(c => ({ c, s: leadState(c) }));
+  const zav = leads.filter(x => x.s.k === 'zavolat').sort((a, b) => (b.s.v.human[0]?.t || '').localeCompare(a.s.v.human[0]?.t || ''));
+  if (zav.length) {
+    const n = zav.length, names = zav.slice(0, 3).map(x => sayName(x.c.name));
+    const head = n === 1 ? 'Jedna firma viděla náš návrh a neozvala se' : n <= 4 ? `${n} firmy viděly náš návrh a neozvaly se` : `${n} firem vidělo náš návrh a neozvalo se`;
+    out.push(`${head}, stojí za to zavolat: ${joinAnd(n > 3 ? [...names, pl(n - 3, 'další', 'další', 'dalším')] : names)}.`);
+  }
+  const due = S.clients.filter(c => c.next_date && c.next_date <= t && c.stage !== 'odmitl' && (!c.owner || c.owner === S.user))
+    .sort((a, b) => a.next_date.localeCompare(b.next_date));
+  if (due.length) {
+    out.push(due.length === 1 ? 'Na dnešek máš domluvenou jednu věc.' : `Na dnešek máš domluvené ${pl(due.length, 'věc', 'věci', 'věcí')}.`);
+    due.slice(0, 4).forEach(c => out.push(`${sayName(c.name)}: ${c.next_action || ST[c.stage]}${c.next_date < t ? ', to je už po termínu' : ''}.`));
+  }
+  const fuMe = leads.filter(x => x.s.k === 'followup' && x.c.made_by === S.user).length, fuOt = leads.filter(x => x.s.k === 'followup' && x.c.made_by === other).length;
+  if (fuMe || fuOt) out.push(`Follow-upy na dnešek: u tebe ${fuMe}, u ${otherG} ${fuOt}.`);
+  const toSend = leads.filter(x => x.s.k === 'hotovo' && x.c.made_by === S.user).length;
+  if (toSend) out.push(`${toSend === 1 ? 'Jeden hotový web čeká' : toSend <= 4 ? `${toSend} hotové weby čekají` : `${toSend} hotových webů čeká`} na odeslání.`);
+  const pend = pending().reduce((s, m) => s + m.amount, 0);
+  if (pend) out.push(`Na zaplacení se čeká ${kc(pend)}.`);
+  out.push(zav.length || due.length || fresh.length ? 'To je všechno, ať se daří.' : 'Nic dalšího nehoří. To je všechno.');
+  return out.join('\n');
+}
+function briefCard(){
+  const st = BRIEF.state;
+  const icon = st === 'loading' ? '<span class="spin" aria-hidden="true"></span>'
+    : st === 'playing' ? '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><rect x="6.5" y="6.5" width="11" height="11" rx="2" fill="currentColor"/></svg>'
+    : '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M8.5 5.8v12.4a.8.8 0 0 0 1.2.7l9.6-6.2a.8.8 0 0 0 0-1.4L9.7 5.1a.8.8 0 0 0-1.2.7z" fill="currentColor"/></svg>';
+  const title = st === 'loading' ? 'Připravuju hlas…' : st === 'playing' ? 'Přehrávám souhrn' : 'Denní souhrn';
+  const sub = st === 'idle' ? 'Poslechni si, co se stalo a co je dnes na tobě.' : 'Klepnutím zastavíš.';
+  return `<div class="card brief mt"><button type="button" class="brief-btn" data-brief aria-label="${st === 'idle' ? 'Přehrát souhrn' : 'Zastavit souhrn'}">${icon}</button>
+    <div class="brief-t"><b>${title}</b><span class="muted">${sub}</span>${BRIEF.text ? `<details${st !== 'idle' ? ' open' : ''}><summary>Text souhrnu</summary><div class="tx">${esc(BRIEF.text)}</div></details>` : ''}</div></div>`;
+}
+const paintBrief = () => { const el = document.querySelector('.card.brief'); if (el) el.outerHTML = briefCard(); };
+function briefDone(){ store.set('rx_brief_' + S.user, today()); BRIEF.state = 'idle'; BRIEF.audio = null; paintBrief(); }
+function briefStop(){ if (BRIEF.audio) BRIEF.audio.pause(); try { speechSynthesis.cancel(); } catch {} BRIEF.audio = null; BRIEF.state = 'idle'; paintBrief(); }
+function briefFallback(why){
+  const voice = (window.speechSynthesis && speechSynthesis.getVoices().find(v => /^cs/i.test(v.lang))) || null;
+  if (!window.speechSynthesis || !voice) { BRIEF.state = 'idle'; paintBrief(); toast('Hlas teď nejde (' + why + '). Text souhrnu je v kartě.', true); return; }
+  const u = new SpeechSynthesisUtterance(BRIEF.text); u.lang = 'cs-CZ'; u.voice = voice; u.onend = briefDone;
+  speechSynthesis.speak(u); BRIEF.state = 'playing'; paintBrief(); toast('Gemini hlas teď nejde, čtu hlasem prohlížeče.');
+}
+async function toggleBrief(){
+  if (BRIEF.state !== 'idle') return briefStop();
+  BRIEF.text = briefText(); BRIEF.state = 'loading'; paintBrief();
+  try {
+    const r = await fetch(API + '/api/tts', { method:'POST', headers:{ 'Content-Type':'application/json', Authorization:'Bearer ' + S.token }, body: JSON.stringify({ text: BRIEF.text }) });
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'chyba ' + r.status);
+    const url = URL.createObjectURL(await r.blob());
+    if (BRIEF.state !== 'loading') return;
+    BRIEF.audio = new Audio(url); BRIEF.audio.onended = briefDone;
+    await BRIEF.audio.play(); BRIEF.state = 'playing'; paintBrief();
+  } catch (err) { if (BRIEF.state === 'loading') briefFallback(err.message); }
+}
+document.addEventListener('click', e => { if (e.target.closest('[data-brief]')) toggleBrief(); });
+
 function lastNote(c){
   const n = String(c.note || '').trim(); if (!n) return '';
   const parts = n.split(/\n/).filter(Boolean);
@@ -659,6 +764,7 @@ function vPrehled(v){
     <div class="card kpi"><div class="lab">Prodané zakázky</div><div class="val">${closed.length}</div><div class="foot">${sold.length} placených · ${closed.length - sold.length} zdarma</div></div>
   </div>
 
+  ${briefCard()}
   ${repliesBox(false)}
   <div class="flow mt">
     <a class="flow-step f-zavolat" href="#leady" data-goto="zavolat"><span class="n">${nZav}</span><span class="t">Zavolat</span><span class="d">viděli web, neozvali se · volají oba</span></a>
