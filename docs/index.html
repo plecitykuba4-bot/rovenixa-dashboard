@@ -127,6 +127,7 @@ main{padding:28px clamp(16px,3vw,40px) 80px;min-width:0}
 .s-zajem{background:var(--gold-bg);color:var(--gold)}
 .s-schuzka{background:#F3DFC0;color:#7A4A12}
 .s-pozdeji{background:#E6E8EA;color:#46505A}
+.s-nabidka{background:#E3ECEA;color:#2F5F5A}
 .s-uzavreny{background:var(--ok-bg);color:var(--ok)}
 .s-odmitl{background:#EEEAE4;color:#8A8278}
 
@@ -166,7 +167,8 @@ td a:hover{text-decoration:underline}
 
 /* kanban */
 .board{display:grid;grid-template-columns:repeat(4,minmax(240px,1fr));gap:14px;overflow-x:auto;padding-bottom:8px}
-.board.five{grid-template-columns:repeat(5,minmax(230px,1fr))}
+.board.five{grid-template-columns:repeat(5,minmax(220px,1fr))}
+.board.six{grid-template-columns:repeat(6,minmax(215px,1fr))}
 .col{background:var(--paper-2);border-radius:var(--radius);padding:12px;min-height:260px;transition:background .2s,box-shadow .2s}
 .col.over{background:var(--gold-bg);box-shadow:inset 0 0 0 2px var(--gold-3)}
 .col-h{display:flex;align-items:center;justify-content:space-between;padding:4px 6px 12px}
@@ -264,7 +266,7 @@ details.more[open] summary::before{content:"– "}
   .kpi.hl{grid-column:1/-1}
   .kpi.hl .val{font-size:28px}
   .bar-row{grid-template-columns:110px 1fr 36px}
-  .board,.board.five{grid-template-columns:repeat(5,82vw);scroll-snap-type:x mandatory}
+  .board,.board.five,.board.six{grid-auto-flow:column;grid-template-columns:none;grid-auto-columns:82vw;scroll-snap-type:x mandatory}
   .col{scroll-snap-align:start}
   .hide-m{display:none}
   .m-h,.m-b,.m-f{padding-left:18px;padding-right:18px}
@@ -327,11 +329,12 @@ const STAGES = [
   {k:'zajem', t:'Projevil zájem'},
   {k:'schuzka', t:'Domluvená schůzka'},
   {k:'pozdeji', t:'Napsat později'},
+  {k:'nabidka', t:'Návrh poslán – čeká na platbu'},
   {k:'uzavreny', t:'Uzavřený klient'},
   {k:'odmitl', t:'Odmítl / nevyšlo'},
 ];
 const ST = Object.fromEntries(STAGES.map(s => [s.k, s.t]));
-const ACTIVE = ['zajem','schuzka','pozdeji'];
+const ACTIVE = ['zajem','schuzka','pozdeji','nabidka'];
 const KINDS = {web:'Webů vytvořeno', odeslano:'Návrhů odesláno', followup:'Follow-upů', odpoved:'Odpovědí', hovor:'Telefonátů', schuzka:'Schůzek', uzavreno:'Uzavřeno'};
 const KIND_SHORT = {web:'Weby', odeslano:'Odesláno', followup:'Follow-up', odpoved:'Odpovědi', hovor:'Hovory', schuzka:'Schůzky', uzavreno:'Uzavřeno'};
 const BASE_ACTORS = ['Claude 1','Claude 2','Jakub','Jan'];
@@ -516,8 +519,8 @@ function vPrehled(v){
   const sentL = S.clients.filter(c => c.sent_date);
   const bounced = c => c.stage === 'odmitl' && /nedoruč|vrátil/i.test(c.note || '');
   const sent = sentL.filter(c => !bounced(c)).length;
-  const fRep = sentL.filter(c => ['zajem','schuzka','pozdeji','uzavreny'].includes(c.stage) || (c.stage === 'odmitl' && !bounced(c))).length;
-  const fInt = sentL.filter(c => ['zajem','schuzka','uzavreny'].includes(c.stage)).length;
+  const fRep = sentL.filter(c => ['zajem','schuzka','pozdeji','nabidka','uzavreny'].includes(c.stage) || (c.stage === 'odmitl' && !bounced(c))).length;
+  const fInt = sentL.filter(c => ['zajem','schuzka','nabidka','uzavreny'].includes(c.stage)).length;
   const fBuy = sentL.filter(c => c.stage === 'uzavreny').length;
   const fNo = sentL.filter(c => c.stage === 'odmitl' && !bounced(c)).length;
   const pct = (a, b) => b ? (a / b * 100).toLocaleString('cs-CZ', { maximumFractionDigits: a / b < .1 ? 1 : 0 }) + ' %' : '0 %';
@@ -619,12 +622,12 @@ function kcard(c){
   </div>`;
 }
 function vKlienti(v){
-  const cols = ['zajem','schuzka','pozdeji','uzavreny'].concat(S.showLost ? ['odmitl'] : []);
+  const cols = ['zajem','schuzka','pozdeji','nabidka','uzavreny'].concat(S.showLost ? ['odmitl'] : []);
   const ownF = c => !S.owner || (S.owner === '-' ? !c.owner : c.owner === S.owner);
   v.innerHTML = pageTop('Klienti', 'Přetáhněte kartu do jiného sloupce, když se klient posune.',
     `<div class="chips">${[['','Všichni'],[S.user,'Moje'],...PEOPLE.filter(p=>p!==S.user).map(p=>[p,p]),['-','Nikdo neřeší']].map(([k,t]) => `<button class="chip" data-own="${k}" aria-pressed="${S.owner===k}">${t}</button>`).join('')}</div>` +
     `<button class="chip" aria-pressed="${S.showLost}" data-act="toggle-lost">Odmítnutí (${S.clients.filter(c=>c.stage==='odmitl').length})</button>` + BTN_CLIENT) +
-    `<div class="board ${cols.length===5?'five':''}">${cols.map(k => { const list = S.clients.filter(c => c.stage === k && ownF(c))
+    `<div class="board ${cols.length===6?'six':'five'}">${cols.map(k => { const list = S.clients.filter(c => c.stage === k && ownF(c))
       .sort((a,b) => (a.next_date||'9').localeCompare(b.next_date||'9') || b.updated_at.localeCompare(a.updated_at));
       const sum = list.reduce((s,c)=>s+(c.price||0),0);
       return `<section class="col" data-drop="${k}"><div class="col-h"><h3><span class="stage s-${k}">${ST[k]}</span></h3><span class="sum">${list.length}${sum && k!=='odmitl' ? ' · ' + kc(sum) : ''}</span></div>
