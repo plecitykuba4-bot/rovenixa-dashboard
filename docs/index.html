@@ -566,7 +566,12 @@ const gist = t => { let s = String(t || '').replace(/\s+/g, ' ').replace(/^\s*(d
 const ACT_SAY = { web:['hotový web','hotové weby','hotových webů'], odeslano:['odeslaný návrh','odeslané návrhy','odeslaných návrhů'],
   followup:['follow-up','follow-upy','follow-upů'], hovor:['telefonát','telefonáty','telefonátů'], odpoved:['zapsaná odpověď','zapsané odpovědi','zapsaných odpovědí'],
   schuzka:['domluvená schůzka','domluvené schůzky','domluvených schůzek'], uzavreno:['uzavřená zakázka','uzavřené zakázky','uzavřených zakázek'] };
-const STAGE_SAY = { zajem:'má zájem', schuzka:'má domluvenou schůzku', pozdeji:'se má ozvat později' };
+// Celá odpověď, jak ji firma napsala: bez podpisu a kontaktů za pozdravem, nejvýš ~420 znaků po celých větách.
+const fullReply = t => { let s = String(t || '').replace(/\s+/g, ' ').trim();
+  const end = s.search(/[\s.,!](s pozdravem|se srdečným pozdravem|s přáním hezkého dne|hezký den|pěkný den|mějte se)/i);
+  if (end > 15) s = s.slice(0, end + 1).trim();
+  if (s.length <= 420) return /[.!?]$/.test(s) ? s : s + '.';
+  let o = ''; for (const x of s.match(/[^.!?]+[.!?]*/g) || []) { if (o && (o + x).length > 420) break; o += x; } return o.trim() + ' A dál pokračuje v mailu.'; };
 
 function briefText(){
   const t = today(), yest = addDays(t, -1), h = new Date().getHours();
@@ -582,16 +587,20 @@ function briefText(){
   if (ot) out.push(`${me ? 'U' : when + ' u'} ${otherG}: ${ot}.`);
   if (!me && !ot) out.push(`${when} se do evidence nic nového nezapsalo.`);
 
-  const fresh = S.clients.filter(c => +c.reply_new).sort((a, b) => (b.reply_at || '').localeCompare(a.reply_at || ''));
-  if (fresh.length) {
-    const n = fresh.length;
+  // Odpovědi: přečíst celé, jak je firma napsala (bez podpisu). Termín jen když je na dnešek.
+  const said = new Set();
+  const reps = S.clients.filter(c => c.reply_at && (+c.reply_new || c.reply_at.slice(0, 10) >= since))
+    .sort((a, b) => (b.reply_at || '').localeCompare(a.reply_at || ''));
+  if (reps.length) {
+    const n = reps.length, MAX = 5;
     out.push(n === 1 ? 'Odepsala jedna firma.' : n <= 4 ? `Odepsaly ${n} firmy.` : `Odepsalo ${n} firem.`);
-    fresh.slice(0, 4).forEach(c => out.push(`${sayName(c.name)} píše: ${gist(c.reply_text)}`));
-    if (n > 4) out.push(`A ${pl(n - 4, 'další', 'další', 'dalších')} najdeš v pruhu Odepsali.`);
-    out.push(n === 1 ? 'Zařaď ji prosím v pruhu Odepsali.' : 'Zařaď je prosím v pruhu Odepsali.');
+    reps.slice(0, MAX).forEach(c => {
+      out.push(`Firma ${sayName(c.name)} napsala: ${fullReply(c.reply_text)}`);
+      if (+c.reply_new) out.push('Tahle odpověď ještě není zařazená.');
+      else if (c.next_date && c.next_date <= t && c.next_action) { out.push(`Dnes je potřeba: ${c.next_action}.`); said.add(c.id); }
+    });
+    if (n > MAX) out.push(`${pl(n - MAX, 'Další odpověď', 'Další odpovědi', 'Dalších odpovědí')} najdeš v dashboardu.`);
   }
-  const warm = S.clients.filter(c => !+c.reply_new && c.reply_at && c.reply_at.slice(0, 10) >= since && STAGE_SAY[c.stage]);
-  warm.slice(0, 3).forEach(c => out.push(`${sayName(c.name)} ${STAGE_SAY[c.stage]}${c.next_action ? ': ' + c.next_action : ''}${c.next_date ? ', termín ' + sayDate(c.next_date) : ''}.`));
 
   const leads = S.clients.filter(c => ['studeny','novy','odeslano'].includes(c.stage)).map(c => ({ c, s: leadState(c) }));
   const zav = leads.filter(x => x.s.k === 'zavolat').sort((a, b) => (b.s.v.human[0]?.t || '').localeCompare(a.s.v.human[0]?.t || ''));
@@ -600,11 +609,13 @@ function briefText(){
     const head = n === 1 ? 'Jedna firma viděla náš návrh a neozvala se' : n <= 4 ? `${n} firmy viděly náš návrh a neozvaly se` : `${n} firem vidělo náš návrh a neozvalo se`;
     out.push(`${head}, stojí za to zavolat: ${joinAnd(n > 3 ? [...names, pl(n - 3, 'další', 'další', 'dalším')] : names)}.`);
   }
-  const due = S.clients.filter(c => c.next_date && c.next_date <= t && c.stage !== 'odmitl' && (!c.owner || c.owner === S.user))
-    .sort((a, b) => a.next_date.localeCompare(b.next_date));
+  // Jen co je potřeba udělat dnes (nebo už mělo být); budoucí plány se nečtou.
+  const due = S.clients.filter(c => c.next_date && c.next_date <= t && c.stage !== 'odmitl' && !said.has(c.id) && (!c.owner || c.owner === S.user))
+    .sort((a, b) => b.next_date.localeCompare(a.next_date));
   if (due.length) {
-    out.push(due.length === 1 ? 'Na dnešek máš domluvenou jednu věc.' : `Na dnešek máš domluvené ${pl(due.length, 'věc', 'věci', 'věcí')}.`);
-    due.slice(0, 4).forEach(c => out.push(`${sayName(c.name)}: ${c.next_action || ST[c.stage]}${c.next_date < t ? ', to je už po termínu' : ''}.`));
+    out.push(due.length === 1 ? 'Dnes je potřeba udělat jednu věc.' : `Dnes je potřeba udělat ${pl(due.length, 'věc', 'věci', 'věcí')}.`);
+    due.slice(0, 5).forEach(c => out.push(`${sayName(c.name)}: ${c.next_action || ST[c.stage]}${c.next_date < t ? ' – to už mělo být ' + sayDate(c.next_date) : ''}.`));
+    if (due.length > 5) out.push(`A ${pl(due.length - 5, 'další', 'další', 'dalších')} je v kartách klientů.`);
   }
   const fuMe = leads.filter(x => x.s.k === 'followup' && x.c.made_by === S.user).length, fuOt = leads.filter(x => x.s.k === 'followup' && x.c.made_by === other).length;
   if (fuMe || fuOt) out.push(`Follow-upy na dnešek: u tebe ${fuMe}, u ${otherG} ${fuOt}.`);
@@ -612,7 +623,7 @@ function briefText(){
   if (toSend) out.push(`${toSend === 1 ? 'Jeden hotový web čeká' : toSend <= 4 ? `${toSend} hotové weby čekají` : `${toSend} hotových webů čeká`} na odeslání.`);
   const pend = pending().reduce((s, m) => s + m.amount, 0);
   if (pend) out.push(`Na zaplacení se čeká ${kc(pend)}.`);
-  out.push(zav.length || due.length || fresh.length ? 'To je všechno, ať se daří.' : 'Nic dalšího nehoří. To je všechno.');
+  out.push(zav.length || due.length || reps.length ? 'To je všechno, ať se daří.' : 'Nic dalšího nehoří. To je všechno.');
   return out.join('\n');
 }
 function briefCard(){
@@ -638,12 +649,23 @@ async function toggleBrief(){
   if (BRIEF.state !== 'idle') return briefStop();
   BRIEF.text = briefText(); BRIEF.state = 'loading'; paintBrief();
   try {
-    const r = await fetch(API + '/api/tts', { method:'POST', headers:{ 'Content-Type':'application/json', Authorization:'Bearer ' + S.token }, body: JSON.stringify({ text: BRIEF.text }) });
-    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'chyba ' + r.status);
-    const url = URL.createObjectURL(await r.blob());
+    // Worker bere nejvýš 2500 znaků → kusy po celých řádcích, namluvit souběžně, přehrát za sebou.
+    const parts = []; let cur = '';
+    BRIEF.text.split('\n').forEach(l => { if (cur && (cur + '\n' + l).length > 2300) { parts.push(cur); cur = l; } else cur = cur ? cur + '\n' + l : l; });
+    if (cur) parts.push(cur);
+    const urls = await Promise.all(parts.map(async p => {
+      const r = await fetch(API + '/api/tts', { method:'POST', headers:{ 'Content-Type':'application/json', Authorization:'Bearer ' + S.token }, body: JSON.stringify({ text: p }) });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'chyba ' + r.status);
+      return URL.createObjectURL(await r.blob());
+    }));
     if (BRIEF.state !== 'loading') return;
-    BRIEF.audio = new Audio(url); BRIEF.audio.onended = briefDone;
-    await BRIEF.audio.play(); BRIEF.state = 'playing'; paintBrief();
+    let i = 0;
+    const next = async () => {
+      if (BRIEF.state === 'idle' && i) return;
+      if (i >= urls.length) return briefDone();
+      BRIEF.audio = new Audio(urls[i++]); BRIEF.audio.onended = next; await BRIEF.audio.play();
+    };
+    await next(); BRIEF.state = 'playing'; paintBrief();
   } catch (err) { if (BRIEF.state === 'loading') briefFallback(err.message); }
 }
 document.addEventListener('click', e => { if (e.target.closest('[data-brief]')) toggleBrief(); });
