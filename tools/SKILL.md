@@ -56,7 +56,9 @@ EOF
 
 Aplikace u každé firmy ve fázi `odeslano` sama určí, co dál – podle špióna (návštěvy náhledu z navrhy-stats):
 - **Zavolat** = člověk viděl náhled po odeslání a firma se neozvala. Volá Jakub/Jan, ty nevoláš.
-- **Poslat follow-up** = nic neviděl ani nenapsal a od posledního kontaktu uplynuly 3 dny (max. 2 follow-upy).
+- **Follow-up podle termínu**: 1. follow-up = odeslání + 3 dny, 2. follow-up = odeslání + 7 dní (nejdřív 3 dny po 1.). Víc ne. Každý den poslat všem, kdo mají termín dnes nebo po termínu, a zapsat `{"klient": …, "followup": true}`.
+- **Šuplíky**: follow-upy, odeslání návrhu i stavba webu patří jen tomu Claudovi, který lead má (`made_by`: Jan = Claude 1, Jakub = Claude 2). Cizí šuplík nesahat. Zavolat je společné pro oba.
+- `crm.py fronta` vypíše Zavolat (s % prohlédnuté stránky a časem) a tvůj šuplík: follow-up dnes, příští termíny, odeslat návrh, udělat web. `--vse` = oba šuplíky.
 - Po 2 follow-upech bez reakce = „Bez reakce“.
 
 `crm.py fronta` vypíše oba seznamy (s telefony a e-maily). Odeslaný follow-up zapiš

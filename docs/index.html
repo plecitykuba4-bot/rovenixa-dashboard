@@ -254,6 +254,9 @@ table.leads td{vertical-align:top}
 .acts{display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap}
 .seen{font-size:13px;font-weight:600;color:var(--ink-3);display:inline-flex;align-items:center;gap:4px}
 .seen.yes{color:var(--ok)}
+.seen-m{font-size:13px;color:var(--ink-2);margin-top:2px}.seen-m b{font-weight:650;color:var(--ink)}
+.drawers{display:flex;gap:10px;flex-wrap:wrap;font-size:12.5px;color:var(--ink-3);margin-top:2px}.drawers b{color:var(--ink);font-weight:650}
+.flow-step .d .drawers{margin-top:0}
 .note-cell{max-width:280px;font-size:13px;color:var(--ink-2);line-height:1.4}
 @media (max-width:1100px){.flow{grid-template-columns:1fr 1fr}.funnel.five{grid-template-columns:repeat(3,1fr)}}
 @media (max-width:860px){.flow{gap:8px}.flow-step{padding:10px 12px;column-gap:10px}.flow-step .d{display:none}.flow-step .n{font-size:24px;min-width:0}.funnel.five{grid-template-columns:1fr 1fr}}
@@ -413,6 +416,7 @@ const MONTHS = ['led','úno','bře','dub','kvě','čvn','čvc','srp','zář','ř
 const vocative = {Jakub:'Jakube', Jan:'Honzo'};
 const store = { get(k){ try { return localStorage.getItem(k); } catch { return null; } },
   set(k,v){ try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k,v); } catch {} } };
+S.leadBy = store.get('rx_drawer') || '';
 
 function toast(msg, bad=false){
   const t = $('#toast'); t.textContent = msg; t.classList.toggle('bad', bad); t.classList.add('on');
@@ -472,7 +476,20 @@ function visitsOf(c){
   const from = c.sent_date || '9999';
   const after = vs.filter(v => v.t.slice(0,10) >= from);
   const human = after.filter(v => v.trida === 'clovek' || v.trida === 'clovek2');
-  return { all: vs, after, human, last: human[0] || after[0] || null };
+  const sc = Math.max(0, ...human.map(v => +v.sc || 0)), dur = human.reduce((t, v) => t + (+v.d || 0), 0);
+  return { all: vs, after, human, last: human[0] || after[0] || null, sc, dur };
+}
+const dur = s => s < 60 ? `${s} s` : `${Math.floor(s / 60)} min${s % 60 ? ' ' + (s % 60) + ' s' : ''}`;
+/* šuplíky: každý Claude si bere follow-upy, odeslání i weby jen ze svého; Zavolat je společné */
+const DRAWERS = [['Jan', 'Claude 1'], ['Jakub', 'Claude 2']];
+const drawerOf = c => (DRAWERS.find(([m]) => m === c.made_by) || [, c.made_by || '?'])[1];
+const SHARED = ['zavolat'];
+function fuDue(c){
+  if (!c.sent_date) return '';
+  const fu = +c.followups || 0, sent = c.sent_date.slice(0,10);
+  if (fu === 0) return addDays(sent, 3);
+  if (fu === 1) { const a = addDays(sent, 7), b = addDays((c.last_followup || sent).slice(0,10), 3); return a > b ? a : b; }
+  return '';
 }
 const daysSince = d => d ? Math.round((parse(today()) - parse(d.slice(0,10))) / 864e5) : 999;
 function leadState(c){
@@ -483,15 +500,15 @@ function leadState(c){
   const v = visitsOf(c), fu = +c.followups || 0;
   const lastHuman = v.human[0] ? v.human[0].t.slice(0,10) : '';
   if (lastHuman && (!c.last_call || lastHuman > c.last_call)) return { k:'zavolat', t:'Viděl web – zavolat', cls:'s-zavolat', v };
-  const lastContact = [c.sent_date, c.last_followup, c.last_call].filter(Boolean).sort().pop();
-  const ago = daysSince(lastContact);
-  if (fu < MAX_FOLLOWUPS && ago >= FOLLOWUP_DAYS) return { k:'followup', t:`Poslat ${fu + 1}. follow-up`, cls:'s-followup', v };
-  if (fu >= MAX_FOLLOWUPS && ago >= FOLLOWUP_DAYS) return { k:'ticho', t:'Bez reakce', cls:'s-odmitl', v };
-  return { k:'ceka', t: fu ? `Follow-up ${fu}× – čekáme` : 'Odesláno – čekáme', cls:'s-odeslano', v };
+  const due = fuDue(c), n = fu + 1;
+  if (due && due <= today()) { const late = daysSince(due); return { k:'followup', n, due, t:`${n}. follow-up ${late ? `– ${late} ${late === 1 ? 'den' : late < 5 ? 'dny' : 'dní'} po termínu` : 'dnes'}`, cls:'s-followup', v }; }
+  if (due) return { k:'ceka', n, due, t:`${n}. follow-up ${fd(due)}`, cls:'s-odeslano', v };
+  if (fu >= MAX_FOLLOWUPS && daysSince(c.last_followup) >= FOLLOWUP_DAYS) return { k:'ticho', t:'Bez reakce', cls:'s-odmitl', v };
+  return { k:'ceka', t:`Follow-up ${fu}× – čekáme`, cls:'s-odeslano', v };
 }
 const BUCKETS = [
   ['zavolat', 'Zavolat', 'viděli web, neozvali se'],
-  ['followup', 'Poslat follow-up', 'nic neviděli ani nenapsali'],
+  ['followup', 'Follow-up dnes', 'na řadě dnes a po termínu'],
   ['hotovo', 'Odeslat návrh', 'web je hotový'],
   ['lead', 'Udělat web', 'lead bez webu'],
 ];
@@ -601,6 +618,7 @@ function vPrehled(v){
   const fSeen = sentL.filter(c => visitsOf(c).human.length).length;
   const leadsNow = S.clients.filter(c => ['studeny','novy','odeslano'].includes(c.stage)).map(leadState);
   const nZav = leadsNow.filter(x => x.k === 'zavolat').length, nFu = leadsNow.filter(x => x.k === 'followup').length;
+  const byD = (pred) => `<span class="drawers">${DRAWERS.map(([m,n]) => `<span>${n} <b>${S.clients.filter(c => c.made_by === m && pred(c)).length}</b></span>`).join('')}</span>`;
   const fRep = sentL.filter(c => ['zajem','schuzka','pozdeji','nabidka','uzavreny'].includes(c.stage) || (c.stage === 'odmitl' && !bounced(c))).length;
   const fInt = sentL.filter(c => ['zajem','schuzka','nabidka','uzavreny'].includes(c.stage)).length;
   const fBuy = sentL.filter(c => c.stage === 'uzavreny').length;
@@ -618,10 +636,10 @@ function vPrehled(v){
   </div>
 
   <div class="flow mt">
-    <a class="flow-step f-zavolat" href="#leady" data-goto="zavolat"><span class="n">${nZav}</span><span class="t">Zavolat</span><span class="d">viděli web, neozvali se</span></a>
-    <a class="flow-step f-followup" href="#leady" data-goto="followup"><span class="n">${nFu}</span><span class="t">Poslat follow-up</span><span class="d">nic neviděli ani nenapsali</span></a>
-    <a class="flow-step f-hotovo" href="#leady" data-goto="hotovo"><span class="n">${S.clients.filter(c=>c.stage==='novy').length}</span><span class="t">Odeslat návrh</span><span class="d">web je hotový</span></a>
-    <a class="flow-step f-lead" href="#leady" data-goto="lead"><span class="n">${S.clients.filter(c=>c.stage==='studeny').length}</span><span class="t">Udělat web</span><span class="d">lead bez webu</span></a>
+    <a class="flow-step f-zavolat" href="#leady" data-goto="zavolat"><span class="n">${nZav}</span><span class="t">Zavolat</span><span class="d">viděli web, neozvali se · volají oba</span></a>
+    <a class="flow-step f-followup" href="#leady" data-goto="followup"><span class="n">${nFu}</span><span class="t">Follow-up dnes</span><span class="d">${byD(c => c.stage === 'odeslano' && leadState(c).k === 'followup')}</span></a>
+    <a class="flow-step f-hotovo" href="#leady" data-goto="hotovo"><span class="n">${S.clients.filter(c=>c.stage==='novy').length}</span><span class="t">Odeslat návrh</span><span class="d">${byD(c => c.stage === 'novy')}</span></a>
+    <a class="flow-step f-lead" href="#leady" data-goto="lead"><span class="n">${S.clients.filter(c=>c.stage==='studeny').length}</span><span class="t">Udělat web</span><span class="d">${byD(c => c.stage === 'studeny')}</span></a>
   </div>
 
   <div class="card mt">
@@ -733,22 +751,25 @@ function bindDnD(root){
 function vLeady(v){
   const leads = S.clients.filter(c => ['studeny','novy','odeslano','odmitl'].includes(c.stage));
   const st = new Map(leads.map(c => [c.id, leadState(c)]));
-  const cnt = k => leads.filter(c => st.get(c.id).k === k).length;
+  const inDrawer = c => !S.leadBy || SHARED.includes(st.get(c.id).k) || c.made_by === S.leadBy;
+  const cnt = k => leads.filter(c => st.get(c.id).k === k && inDrawer(c)).length;
+  const cntN = n => leads.filter(c => ['followup','ceka'].includes(st.get(c.id).k) && st.get(c.id).n === n && inDrawer(c)).length;
+  const cntBy = (k, m) => leads.filter(c => st.get(c.id).k === k && c.made_by === m).length;
   const q = S.leadQ.trim().toLowerCase();
   const f = S.leadFilter;
   let list = leads.filter(c => {
     const k = st.get(c.id).k;
     if (f === 'akce') return ['zavolat','followup'].includes(k);
     if (f === 'vse') return k !== 'odmitl';
+    if (f === 'fu1' || f === 'fu2') return ['followup','ceka'].includes(k) && st.get(c.id).n === +f[2];
     if (f === 'odeslano') return ['ceka','zavolat','followup','ticho'].includes(k);
     return k === f;
   });
-  if (S.leadBy) list = list.filter(c => c.made_by === S.leadBy);
+  list = list.filter(inDrawer);
   if (q) list = list.filter(c => [c.name,c.city,c.email,c.phone,c.person,c.preview,c.note].join(' ').toLowerCase().includes(q));
   const order = { zavolat:0, followup:1, ceka:2, ticho:3, hotovo:4, lead:5, odmitl:6 };
-  list.sort((a,b) => order[st.get(a.id).k] - order[st.get(b.id).k] || ((st.get(b.id).v?.last?.t)||'').localeCompare((st.get(a.id).v?.last?.t)||'') || (b.sent_date||'').localeCompare(a.sent_date||''));
-  const makers = [...new Set(S.clients.map(c => c.made_by).filter(Boolean))];
-  const chips = [['akce','Na řadě', cnt('zavolat') + cnt('followup')], ['odeslano','Odesláno', cnt('ceka') + cnt('zavolat') + cnt('followup') + cnt('ticho')],
+  list.sort((a,b) => order[st.get(a.id).k] - order[st.get(b.id).k] || (st.get(a.id).due||'9').localeCompare(st.get(b.id).due||'9') || ((st.get(b.id).v?.last?.t)||'').localeCompare((st.get(a.id).v?.last?.t)||'') || (b.sent_date||'').localeCompare(a.sent_date||''));
+  const chips = [['akce','Na řadě', cnt('zavolat') + cnt('followup')], ['fu1','1. follow-up', cntN(1)], ['fu2','2. follow-up', cntN(2)], ['odeslano','Odesláno', cnt('ceka') + cnt('zavolat') + cnt('followup') + cnt('ticho')],
     ['hotovo','Web hotový', cnt('hotovo')], ['lead','Leady bez webu', cnt('lead')], ['ticho','Bez reakce', cnt('ticho')], ['odmitl','Odmítli', cnt('odmitl')], ['vse','Vše', leads.length - cnt('odmitl')]];
 
   const actions = c => {
@@ -763,18 +784,18 @@ function vLeady(v){
   const seen = c => {
     const x = st.get(c.id).v; if (!x || !x.after.length) return '<span class="muted">—</span>';
     const h = x.human.length;
-    return `<span class="seen ${h ? 'yes' : ''}" title="${esc(x.after.map(v => `${new Date(v.t).toLocaleString('cs-CZ',{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'})} · ${v.verdikt}${v.detail ? ' · ' + v.detail : ''}`).join('\n'))}">${h ? `${ico('check',13)} viděl ${h}×` : `otevřeno ${x.after.length}×`}</span><div class="sub">${fd(x.after[0].t.slice(0,10))}</div>`;
+    return `<span class="seen ${h ? 'yes' : ''}" title="${esc(x.after.map(v => `${new Date(v.t).toLocaleString('cs-CZ',{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'})} · ${v.verdikt}${v.detail ? ' · ' + v.detail : ''}`).join('\n'))}">${h ? `${ico('check',13)} viděl ${h}×` : `otevřeno ${x.after.length}×`}</span>${h ? `<div class="seen-m"><b>${x.sc} %</b> stránky · <b>${dur(x.dur)}</b></div>` : ''}<div class="sub">${fd(x.after[0].t.slice(0,10))}</div>`;
   };
 
   v.innerHTML = pageTop('Leady', 'Od nalezené firmy po odpověď. Kdo odpoví se zájmem, přejde do Klientů.', BTN_CLIENT) + `
   <div class="flow">
-    ${BUCKETS.map(([k,t,d]) => `<button class="flow-step ${f===k || (f==='akce' && (k==='zavolat'||k==='followup')) ? 'on' : ''} f-${k}" data-lf="${k}"><span class="n">${cnt(k)}</span><span class="t">${t}</span><span class="d">${d}</span></button>`).join('')}
+    ${BUCKETS.map(([k,t,d]) => `<button class="flow-step ${f===k || (f==='akce' && (k==='zavolat'||k==='followup')) ? 'on' : ''} f-${k}" data-lf="${k}"><span class="n">${cnt(k)}</span><span class="t">${t}</span><span class="d">${SHARED.includes(k) ? d + ' · volají oba' : `<span class="drawers">${DRAWERS.map(([m,n]) => `<span>${n} <b>${cntBy(k,m)}</b></span>`).join('')}</span>`}</span></button>`).join('')}
   </div>
+  <div class="chips mt" style="align-items:center"><span class="muted" style="font-size:13px;margin-right:4px">Šuplík:</span>${[['','Oba'],...DRAWERS.map(([m,n]) => [m, n + ' · ' + m])].map(([k,t]) => `<button class="chip" data-drawer="${k}" aria-pressed="${S.leadBy===k}">${t}</button>`).join('')}</div>
   <div class="card mt">
     <div class="toolbar">
       <div class="chips">${chips.map(([k,t,n]) => `<button class="chip" data-lf="${k}" aria-pressed="${f===k}">${t}<span class="c">${n}</span></button>`).join('')}</div>
       <input class="inp search" type="search" placeholder="Hledat firmu, město, telefon…" value="${esc(S.leadQ)}" id="leadQ">
-      <select class="inp" id="leadBy"><option value="">Web dělal: kdokoli</option>${makers.map(m => `<option ${S.leadBy===m?'selected':''}>${esc(m)}</option>`).join('')}</select>
     </div>
     <div class="tbl-wrap"><table class="leads">
       <thead><tr><th>Firma</th><th>Stav</th><th class="hide-m">Návštěvy webu</th><th class="hide-m">Odesláno</th><th class="hide-m">Poslední zpráva</th><th class="num">Co udělat</th></tr></thead>
@@ -790,7 +811,6 @@ function vLeady(v){
     </div>
   </div>`;
   const qi = $('#leadQ'); qi.addEventListener('input', () => { S.leadQ = qi.value; const pos = qi.selectionStart; vLeady(v); const n = $('#leadQ'); n.focus(); n.setSelectionRange(pos,pos); });
-  $('#leadBy').addEventListener('change', e => { S.leadBy = e.target.value; vLeady(v); });
 }
 
 /* odpověď na e-mail nebo výsledek hovoru – jedno okno */
@@ -1085,6 +1105,7 @@ document.addEventListener('click', async e => {
   if (t.dataset.paid) { e.stopPropagation(); try { const r = await api('PATCH','/api/money/'+t.dataset.paid, { status:'zaplaceno' }); upsert(S.money, r); toast('Označeno jako zaplacené'); render(); } catch (err) { toast(err.message, true); } return; }
   if (t.dataset.money) return openMoney(S.money.find(m => m.id === +t.dataset.money));
   if (t.dataset.lf) { S.leadFilter = t.dataset.lf; return render(); }
+  if (t.dataset.drawer !== undefined) { S.leadBy = t.dataset.drawer; store.set('rx_drawer', S.leadBy); return render(); }
   if (t.dataset.own !== undefined) { S.owner = t.dataset.own; return render(); }
   if (t.dataset.mf) { S.moneyFilter = t.dataset.mf; return render(); }
   if (t.dataset.week) { if (t.disabled) return; S.week = Math.min(0, S.week + +t.dataset.week); return render(); }

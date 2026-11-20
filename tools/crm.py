@@ -206,12 +206,30 @@ def run_batch(ops, actor):
             print('?? neznámá operace', json.dumps(op, ensure_ascii=False))
 
 
-def fronta():
-    """Stejná logika jako stránka Leady: komu zavolat (viděl web) a komu poslat follow-up."""
+def fu_due(c):
+    """Termín dalšího follow-upu: 1. = odeslání + 3 dny, 2. = odeslání + 7 dní (nejdřív 3 dny po 1.). Po 2. nic."""
+    D = datetime.date.fromisoformat
+    if not c.get('sent_date'):
+        return None
+    n = int(c.get('followups') or 0)
+    sent = D(c['sent_date'][:10])
+    if n == 0:
+        return sent + datetime.timedelta(days=3)
+    if n == 1:
+        lf = D(c['last_followup'][:10]) if c.get('last_followup') else sent
+        return max(sent + datetime.timedelta(days=7), lf + datetime.timedelta(days=3))
+    return None
+
+
+def fronta(actor, vse=False):
+    """Stejná logika jako stránka Leady. Zavolat je společné (oba), follow-up / odeslat / udělat web
+    jen ze šuplíku tohohle Clauda (made_by = kdo.txt), s --vse z obou."""
     import re
     clients = call('GET', '/api/clients')
     visits = call('GET', '/api/visits')
     slug = lambda u: re.sub(r'^https?://', '', (u or '').lower()).split('.')[0].split('/')[0].replace('-', '')
+    claude = {'Jan': 'Claude 1', 'Jakub': 'Claude 2'}
+    mine = lambda c: vse or c.get('made_by') == actor
     t = datetime.date.today()
     zav, fu = [], []
     for c in clients:
@@ -219,21 +237,32 @@ def fronta():
             continue
         sl = slug(c.get('preview'))
         sent = c.get('sent_date') or '9999'
-        human = sorted((v['t'][:10] for v in visits if sl and v['site'].replace('-', '') == sl
-                        and v['t'][:10] >= sent and v['trida'] in ('clovek', 'clovek2')), reverse=True)
-        if human and (not c.get('last_call') or human[0] > c['last_call']):
-            zav.append((c, human[0], len(human)))
+        hv = sorted((v for v in visits if sl and v['site'].replace('-', '') == sl
+                     and v['t'][:10] >= sent and v['trida'] in ('clovek', 'clovek2')), key=lambda v: v['t'], reverse=True)
+        if hv and (not c.get('last_call') or hv[0]['t'][:10] > c['last_call']):
+            zav.append((c, hv[0]['t'][:10], len(hv), max(int(v.get('sc') or 0) for v in hv), sum(int(v.get('d') or 0) for v in hv)))
             continue
-        last = max(x for x in [c.get('sent_date'), c.get('last_followup'), c.get('last_call')] if x) if sent != '9999' else None
-        n = int(c.get('followups') or 0)
-        if last and n < 2 and (t - datetime.date.fromisoformat(last[:10])).days >= 3:
-            fu.append((c, n + 1, last))
-    print(f'ZAVOLAT – viděli web ({len(zav)}):')
-    for c, d, n in zav:
-        print(f"  #{c['id']:<4} {c['name'][:42]:<42} {c.get('phone') or '-':<14} viděl {n}×, naposledy {d}")
-    print(f'\nPOSLAT FOLLOW-UP ({len(fu)}):')
-    for c, k, last in fu:
-        print(f"  #{c['id']:<4} {c['name'][:42]:<42} {k}. follow-up  {c.get('email') or '-'}  (naposledy {last}, náhled {c.get('preview') or '-'})")
+        due = fu_due(c)
+        if due and mine(c):
+            fu.append((c, int(c.get('followups') or 0) + 1, due))
+    fu.sort(key=lambda x: x[2])
+    kdo = 'oba šuplíky' if vse else f"šuplík {claude.get(actor, actor)} ({actor})"
+    print(f'ZAVOLAT – viděli web, volají oba ({len(zav)}):')
+    for c, d, n, sc, du in zav:
+        print(f"  #{c['id']:<4} {c['name'][:42]:<42} {c.get('phone') or '-':<14} viděl {n}×, prošel {sc} %, {du} s, naposledy {d}")
+    dnes = [x for x in fu if x[2] <= t]
+    print(f"\nFOLLOW-UP DNES (a po termínu) – {kdo} ({len(dnes)}):")
+    for c, k, due in dnes:
+        print(f"  #{c['id']:<4} {c['name'][:42]:<42} {k}. follow-up  termín {due}  {c.get('email') or '-'}  náhled {c.get('preview') or '-'}")
+    pozdeji = [x for x in fu if x[2] > t]
+    print(f"\nFOLLOW-UP PŘÍŠTĚ – {kdo} ({len(pozdeji)}):")
+    for c, k, due in pozdeji[:15]:
+        print(f"  #{c['id']:<4} {c['name'][:42]:<42} {k}. follow-up  termín {due}")
+    for st, nadpis in (('novy', 'ODESLAT NÁVRH – web hotový'), ('studeny', 'UDĚLAT WEB – lead bez webu')):
+        xs = [c for c in clients if c['stage'] == st and mine(c)]
+        print(f"\n{nadpis} – {kdo} ({len(xs)}):")
+        for c in xs:
+            print(f"  #{c['id']:<4} {c['name'][:42]:<42} {c.get('email') or '-'}  {c.get('preview') or c.get('web') or ''}")
 
 
 def kv(pairs):
@@ -266,7 +295,7 @@ def main():
     p.add_argument('--client'); p.add_argument('--date')
     p = sp.add_parser('delete'); p.add_argument('table', choices=['clients', 'money', 'activity']); p.add_argument('id', type=int)
     sp.add_parser('stats')
-    sp.add_parser('fronta', help='komu zavolat (viděl web) a komu poslat follow-up')
+    p = sp.add_parser('fronta', help='Zavolat (oba) + follow-up, odeslat, udělat web z mého šuplíku'); p.add_argument('--vse', action='store_true', help='oba šuplíky')
     a = ap.parse_args()
 
     if a.cmd == 'do':
@@ -295,7 +324,7 @@ def main():
     elif a.cmd == 'delete':
         print(call('DELETE', f'/api/{a.table}/{a.id}'))
     elif a.cmd == 'fronta':
-        fronta()
+        fronta(KDO, a.vse)
     elif a.cmd == 'stats':
         d = call('GET', '/api/all')
         from collections import Counter

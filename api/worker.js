@@ -125,7 +125,7 @@ export default {
           if (!r.ok) return json(req, { error: 'Špión neodpovídá (' + r.status + ')' }, 502);
           const raw = await r.json();
           const slim = raw.map((v) => ({ site: v.site, t: v.t, trida: v.trida, verdikt: v.verdikt,
-            detail: v.detail, city: v.city, mobil: (v.w || 9999) < 800 }));
+            detail: v.detail, city: v.city, mobil: (v.w || 9999) < 800, sc: v.sc || 0, d: v.act || v.d || 0 }));
           res = new Response(JSON.stringify(slim), { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'max-age=120' } });
           await cache.put(ck, res.clone());
         }
