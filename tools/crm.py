@@ -222,11 +222,12 @@ def fu_due(c):
         return None
     n = int(c.get('followups') or 0)
     sent = D(c['sent_date'][:10])
+    wd = lambda d: d + datetime.timedelta(days={5: 2, 6: 1}.get(d.weekday(), 0))  # sobota/neděle → pondělí
     if n == 0:
-        return sent + datetime.timedelta(days=3)
+        return wd(sent + datetime.timedelta(days=3))
     if n == 1:
         lf = D(c['last_followup'][:10]) if c.get('last_followup') else sent
-        return max(sent + datetime.timedelta(days=7), lf + datetime.timedelta(days=3))
+        return wd(max(sent + datetime.timedelta(days=7), lf + datetime.timedelta(days=3)))
     return None
 
 
@@ -260,7 +261,7 @@ def fronta(actor, vse=False):
     for c, d, n, sc, du in zav:
         print(f"  #{c['id']:<4} {c['name'][:42]:<42} {c.get('phone') or '-':<14} viděl {n}×, prošel {sc} %, {du} s, naposledy {d}")
     zitra = t + datetime.timedelta(days=1)
-    print(f"\nFOLLOW-UPY – {kdo} (1. = odeslání + 3 dny, 2. = odeslání + 7 dní):")
+    print(f"\nFOLLOW-UPY – {kdo} (1. = odeslání + 3 dny, 2. = odeslání + 7 dní, víkend → pondělí):")
     for nadpis, fn, plne in (('PO TERMÍNU – poslat hned', lambda d: d < t, True), ('DNES', lambda d: d == t, True),
                              ('ZÍTRA', lambda d: d == zitra, False), ('POZDĚJI', lambda d: d > zitra, False)):
         xs = [x for x in fu if fn(x[2])]

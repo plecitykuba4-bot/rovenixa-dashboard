@@ -490,11 +490,13 @@ const dur = s => s < 60 ? `${s} s` : `${Math.floor(s / 60)} min${s % 60 ? ' ' + 
 const DRAWERS = [['Jan', 'Claude 1'], ['Jakub', 'Claude 2']];
 const drawerOf = c => (DRAWERS.find(([m]) => m === c.made_by) || [, c.made_by || '?'])[1];
 const SHARED = ['zavolat'];
+/* sobota a neděle → pondělí */
+const workday = d => { const w = parse(d).getDay(); return w === 6 ? addDays(d, 2) : w === 0 ? addDays(d, 1) : d; };
 function fuDue(c){
   if (!c.sent_date) return '';
   const fu = +c.followups || 0, sent = c.sent_date.slice(0,10);
-  if (fu === 0) return addDays(sent, 3);
-  if (fu === 1) { const a = addDays(sent, 7), b = addDays((c.last_followup || sent).slice(0,10), 3); return a > b ? a : b; }
+  if (fu === 0) return workday(addDays(sent, 3));
+  if (fu === 1) { const a = addDays(sent, 7), b = addDays((c.last_followup || sent).slice(0,10), 3); return workday(a > b ? a : b); }
   return '';
 }
 const daysSince = d => d ? Math.round((parse(today()) - parse(d.slice(0,10))) / 864e5) : 999;

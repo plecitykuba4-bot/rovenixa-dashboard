@@ -56,7 +56,7 @@ EOF
 
 Aplikace u každé firmy ve fázi `odeslano` sama určí, co dál – podle špióna (návštěvy náhledu z navrhy-stats):
 - **Zavolat** = člověk viděl náhled po odeslání a firma se neozvala. Volá Jakub/Jan, ty nevoláš.
-- **Follow-up podle termínu**: 1. follow-up = odeslání + 3 dny, 2. follow-up = odeslání + 7 dní (nejdřív 3 dny po 1.). Víc ne. Každý den poslat všem, kdo mají termín dnes nebo po termínu, a zapsat `{"klient": …, "followup": true}`.
+- **Follow-up podle termínu**: 1. follow-up = odeslání + 3 dny, 2. follow-up = odeslání + 7 dní (nejdřív 3 dny po 1.). Termín v sobotu/neděli se posouvá na pondělí. Víc ne. Každý den poslat všem, kdo mají termín dnes nebo po termínu, a zapsat `{"klient": …, "followup": true}`.
 - **Šuplíky**: follow-upy, odeslání návrhu i stavba webu patří jen tomu Claudovi, který lead má (`made_by`: Jan = Claude 1, Jakub = Claude 2). Cizí šuplík nesahat. Zavolat je společné pro oba. `crm.py` to hlídá sám: follow-up, `stage` novy/odeslano na cizím leadu skončí hláškou STOP a nic nezapíše (`"cizi": true` jen na výslovný pokyn Kuby). Nové leady (`lead`) se zapíšou do šuplíku podle `kdo.txt` (PC Clauda 1 = `Jan`, PC Clauda 2 = `Jakub`).
 - `crm.py fronta` vypíše Zavolat (s % prohlédnuté stránky a časem) a tvůj šuplík: follow-up dnes, příští termíny, odeslat návrh, udělat web. `--vse` = oba šuplíky.
 - Po 2 follow-upech bez reakce = „Bez reakce“.
