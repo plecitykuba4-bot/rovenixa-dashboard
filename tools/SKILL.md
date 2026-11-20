@@ -68,6 +68,17 @@ do `next_date` nedávej, to aplikace hlídá sama.
 Odpověď firmy: `{"klient": "...", "stage": "zajem|schuzka|pozdeji|odmitl", "next_date": "...", "next_action": "...", "add_note": "Odpověď: co napsal"}`.
 Do `next_date` + `next_action` patří jen domluvené věci (schůzka, slíbený hovor, „ozvěte se v únoru“) – ukazují se v „Domluvené termíny“.
 
+### Zápis odpovědi musí být jednoznačný (Kuba 20. 11.)
+
+Kuba a Jan musí z CRM bez otevírání mailu poznat: co přesně firma napsala, co to znamená a kdy/jak se jí ozvat.
+Odpovědi z Gmailu chodí samy (`reply_new`, `reply_text`, pruh „Odepsali“ v dashboardu); zařazuješ je ty.
+- `add_note`: `Odpověď e-mailem 19. 11. 13:48: „doslovná klíčová věta“. Co to znamená + co dál.` – vždy datum, citace jejich slov a závěr.
+  Příklad: `… návrh se jí líbí, „určitě využiji Vašich služeb“, ale web chce řešit „v průběhu příštího roku“. Přesný měsíc neřekla → napsat 11. 1. 2027, zeptat se, kdy se jí to hodí.`
+- `pozdeji` a `zajem` vždy s `next_date` (konkrétní den, ne „někdy“) a `next_action`, která říká přesně co udělat
+  („Napsat e-mail: kdy chce začít s webem“, „Zavolat na 602 666 747 – chce se sejít osobně“). Když termín neřekli, odhadni rozumný a napiš do poznámky, že je odhadnutý a proč.
+- `odmitl`: v poznámce důvod jejich slovy a „dál neoslovovat“; termíny vymazat.
+- Po zařazení vždy `"reply_new": 0` (jinak svítí v pruhu Odepsali dál). Původní text odpovědi zůstává v detailu klienta.
+
 ## Kontrola
 
 `crm.py fronta`, `crm.py find text`, `crm.py list --stage zajem`, `crm.py stats` (fáze, posledních 7 dní, domluvené termíny).

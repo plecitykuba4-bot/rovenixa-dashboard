@@ -18,7 +18,7 @@ function check() {
     const from = (m.getFrom().match(/[\w.+-]+@[\w.-]+/) || [''])[0].toLowerCase();
     const link = 'https://mail.google.com/mail/?authuser=' + encodeURIComponent(me) + '#all/' + t.getId();
     if (emails.has(from)) {
-      replies.push({ email: from, at: m.getDate().toISOString(), text: m.getPlainBody().split(/\n>|\nOn .* wrote:|\nDne .* napsal/)[0].trim().slice(0, 600), link });
+      replies.push({ email: from, at: m.getDate().toISOString(), text: clean(m.getPlainBody()), link });
     } else if (/mailer-daemon|postmaster/i.test(from)) {
       (m.getPlainBody().match(/[\w.+-]+@[\w.-]+/g) || []).map(x => x.toLowerCase())
         .filter(x => emails.has(x)).forEach(x => bounces.push({ email: x, at: m.getDate().toISOString() }));
@@ -27,4 +27,10 @@ function check() {
   if (!replies.length && !bounces.length) return;
   UrlFetchApp.fetch(API + '/api/mail/report', { method: 'post', contentType: 'application/json', headers: h,
     payload: JSON.stringify({ replies, bounces }) });
+}
+
+// Jen nová odpověď bez citace původního mailu (Gmail, Seznam, Outlook, CZ i EN).
+function clean(body) {
+  return body.replace(/\r\n?/g, '\n').replace(/ /g, ' ').split(/\n-- ?\n|\n\s*>|\nOn .* wrote:|\nDne .* napsal|\n\s*-{3,}\s*(?:Původní|Puvodni|Original|Přeposlan|Forwarded)|\n_{5,}|\n\s*(?:Od|From):?\s.*@.*\n(?:\s*\n)?\s*(?:Odesláno|Sent|Komu|To|Datum|Date)\b/i)[0]
+    .replace(/\n{3,}/g, '\n\n').trim().slice(0, 600);
 }
