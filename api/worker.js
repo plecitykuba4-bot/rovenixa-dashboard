@@ -1,9 +1,10 @@
 // Rovenixa CRM API – Cloudflare Worker + D1
-// Secrets: PASS_JAKUB, PASS_JAN, CLAUDE_KEY, TOKEN_SECRET, SPY_URL
+// Secrets: PASS_JAKUB, PASS_JAN, CLAUDE_KEY, TOKEN_SECRET, SPY_URL, MAIL_KEY (Gmail Apps Script)
 
 const TABLES = {
   clients: ['name', 'person', 'phone', 'email', 'city', 'web', 'preview', 'stage', 'price',
-    'next_date', 'next_action', 'sent_date', 'note', 'source', 'made_by', 'owner', 'typ', 'followups', 'last_followup', 'last_call'],
+    'next_date', 'next_action', 'sent_date', 'note', 'source', 'made_by', 'owner', 'typ', 'followups', 'last_followup', 'last_call',
+    'reply_new', 'reply_at', 'reply_text', 'reply_link'],
   money: ['date', 'kind', 'amount', 'status', 'client_id', 'label'],
   activity: ['date', 'actor', 'kind', 'count', 'client_id', 'note'],
 };
@@ -108,6 +109,42 @@ export default {
           return json(req, { error: 'Špatné jméno nebo heslo' }, 401);
         }
         return json(req, { user: u[0], token: await makeToken(env, u[0]) });
+      }
+
+      // Gmail Apps Script: hlásí odpovědi a vrácené maily od firem z CRM (vlastní klíč MAIL_KEY)
+      if (p.startsWith('/api/mail/')) {
+        const t = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
+        if (!env.MAIL_KEY || !safeEq(t, env.MAIL_KEY)) return json(req, { error: 'Nepřihlášen' }, 401);
+        const all = (await env.DB.prepare("SELECT id, name, email, stage, note, reply_at FROM clients WHERE email <> ''").all()).results;
+        const mails = (c) => c.email.toLowerCase().split(/[,;\s]+/).filter((x) => x.includes('@'));
+        if (p === '/api/mail/emails' && req.method === 'GET') {
+          return json(req, { emails: [...new Set(all.flatMap(mails))] });
+        }
+        if (p === '/api/mail/report' && req.method === 'POST') {
+          const { replies = [], bounces = [] } = await req.json();
+          const byMail = new Map();
+          all.forEach((c) => mails(c).forEach((m) => byMail.set(m, c)));
+          const done = [];
+          for (const r of replies.slice(0, 200)) {
+            const c = byMail.get(String(r.email || '').toLowerCase());
+            if (!c || (c.reply_at && c.reply_at >= r.at)) continue;
+            await env.DB.prepare("UPDATE clients SET reply_new=1, reply_at=?, reply_text=?, reply_link=?, updated_at=datetime('now'), updated_by='Gmail' WHERE id=?")
+              .bind(String(r.at), String(r.text || '').slice(0, 600), String(r.link || ''), c.id).run();
+            c.reply_at = r.at; done.push({ id: c.id, name: c.name, kind: 'odpoved' });
+          }
+          for (const b of bounces.slice(0, 200)) {
+            const c = byMail.get(String(b.email || '').toLowerCase());
+            if (!c || /Nedoručeno/.test(c.note || '')) continue;
+            const day = String(b.at || new Date().toISOString()).slice(0, 10);
+            const line = `[${day}] Nedoručeno: Gmail vrátil e-mail na ${b.email}`;
+            const only = mails(c).length === 1 && ['novy', 'odeslano'].includes(c.stage);
+            await env.DB.prepare(`UPDATE clients SET note=?, ${only ? "stage='odmitl', " : ''}updated_at=datetime('now'), updated_by='Gmail' WHERE id=?`)
+              .bind(((c.note || '') + '\n' + line).trim(), c.id).run();
+            c.note = line; done.push({ id: c.id, name: c.name, kind: only ? 'nedoruceno' : 'nedoruceno-jedna-adresa' });
+          }
+          return json(req, { ok: true, done });
+        }
+        return json(req, { error: 'Nenalezeno' }, 404);
       }
 
       const user = await whoIs(env, req);

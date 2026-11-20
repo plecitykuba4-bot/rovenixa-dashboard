@@ -47,3 +47,9 @@ CREATE TABLE IF NOT EXISTS activity (
 );
 CREATE INDEX IF NOT EXISTS i_cl_stage ON clients(stage);
 CREATE INDEX IF NOT EXISTS i_act_date ON activity(date);
+
+-- 2026-11-20: odpovědi z Gmailu
+-- ALTER TABLE clients ADD COLUMN reply_new INTEGER DEFAULT 0;
+-- ALTER TABLE clients ADD COLUMN reply_at TEXT DEFAULT '';
+-- ALTER TABLE clients ADD COLUMN reply_text TEXT DEFAULT '';
+-- ALTER TABLE clients ADD COLUMN reply_link TEXT DEFAULT '';

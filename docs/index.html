@@ -260,6 +260,10 @@ table.leads td{vertical-align:top}
 .leads tr.fu-late td{background:#FBF1EE}
 .fu-done{margin:14px 4px 4px;font-size:14px}.fu-done summary{cursor:pointer;color:var(--ink-3);font-weight:600;padding:6px 0}
 .fu-done .row{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-top:1px solid var(--line);cursor:pointer}
+.replies{border-color:var(--ok);padding:14px 18px}.rp-h{margin-bottom:6px}
+.rp{display:flex;gap:14px;justify-content:space-between;align-items:flex-start;padding:10px 0;border-top:1px solid var(--line)}
+.rp-t{cursor:pointer;min-width:0}.rp-x{font-size:13.5px;color:var(--ink-2);margin-top:3px;white-space:pre-line}
+@media (max-width:700px){.rp{flex-direction:column}}
 .seen-m{font-size:13px;color:var(--ink-2);margin-top:2px}.seen-m b{font-weight:650;color:var(--ink)}
 .drawers{display:flex;gap:10px;flex-wrap:wrap;font-size:12.5px;color:var(--ink-3);margin-top:2px}.drawers b{color:var(--ink);font-weight:650}
 .flow-step .d .drawers{margin-top:0}
@@ -496,11 +500,12 @@ function fuDue(c){
   if (!c.sent_date) return '';
   const fu = +c.followups || 0, sent = c.sent_date.slice(0,10);
   if (fu === 0) return workday(addDays(sent, 3));
-  if (fu === 1) { const a = addDays(sent, 7), b = addDays((c.last_followup || sent).slice(0,10), 3); return workday(a > b ? a : b); }
+  if (fu === 1) return workday(addDays((c.last_followup || sent).slice(0,10), 5));
   return '';
 }
 const daysSince = d => d ? Math.round((parse(today()) - parse(d.slice(0,10))) / 864e5) : 999;
 function leadState(c){
+  if (+c.reply_new && ['studeny','novy','odeslano'].includes(c.stage)) return { k:'odepsal', t:'Odepsal – přečíst', cls:'s-zajem' };
   if (c.stage === 'studeny') return { k:'lead', t:'Lead', cls:'s-studeny' };
   if (c.stage === 'novy') return { k:'hotovo', t:'Web hotový', cls:'s-novy' };
   if (c.stage === 'odmitl') return { k:'odmitl', t:'Odmítl', cls:'s-odmitl' };
@@ -520,6 +525,15 @@ const BUCKETS = [
   ['hotovo', 'Odeslat návrh', 'web je hotový'],
   ['lead', 'Udělat web', 'lead bez webu'],
 ];
+function repliesBox(full){
+  const xs = S.clients.filter(c => +c.reply_new).sort((a,b) => (b.reply_at||'').localeCompare(a.reply_at||''));
+  if (!xs.length) return '';
+  return `<div class="card replies mt"><div class="rp-h"><b>${xs.length === 1 ? 'Odepsala 1 firma' : `Odepsaly ${xs.length} firmy`}</b><span class="muted"> – přečíst a zařadit (z Gmailu)</span></div>
+    ${xs.slice(0, full ? 50 : 5).map(c => `<div class="rp">
+      <div class="rp-t" data-open="${c.id}"><b>${esc(c.name)}</b> <span class="muted">${new Date(c.reply_at).toLocaleString('cs-CZ',{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'})} · ${esc(ST[c.stage] || c.stage)}</span><div class="rp-x">${esc(String(c.reply_text||'').slice(0, 220))}</div></div>
+      <div class="acts">${c.reply_link ? `<a class="btn sm" href="${esc(c.reply_link)}" target="_blank" rel="noopener">Otevřít mail</a>` : ''}<button class="btn sm gold" data-reply="${c.id}" data-mode="mail">Zařadit</button><button class="btn sm" data-seen-reply="${c.id}" title="Jen označit jako přečtené, nic neměnit">Přečteno</button></div>
+    </div>`).join('')}${!full && xs.length > 5 ? `<a class="muted" href="#leady" style="font-size:13px">… a další ${xs.length - 5} na Leadech</a>` : ''}</div>`;
+}
 function lastNote(c){
   const n = String(c.note || '').trim(); if (!n) return '';
   const parts = n.split(/\n/).filter(Boolean);
@@ -643,6 +657,7 @@ function vPrehled(v){
     <div class="card kpi"><div class="lab">Prodané zakázky</div><div class="val">${closed.length}</div><div class="foot">${sold.length} placených · ${closed.length - sold.length} zdarma</div></div>
   </div>
 
+  ${repliesBox(false)}
   <div class="flow mt">
     <a class="flow-step f-zavolat" href="#leady" data-goto="zavolat"><span class="n">${nZav}</span><span class="t">Zavolat</span><span class="d">viděli web, neozvali se · volají oba</span></a>
     <a class="flow-step f-followup" href="#leady" data-goto="followup"><span class="n">${nFu}</span><span class="t">Follow-up dnes</span><span class="d">${byD(c => c.stage === 'odeslano' && leadState(c).k === 'followup')}</span></a>
@@ -775,7 +790,7 @@ function vLeady(v){
   });
   list = list.filter(inDrawer);
   if (q) list = list.filter(c => [c.name,c.city,c.email,c.phone,c.person,c.preview,c.note].join(' ').toLowerCase().includes(q));
-  const order = { zavolat:0, followup:1, ceka:2, ticho:3, hotovo:4, lead:5, odmitl:6 };
+  const order = { odepsal:-1, zavolat:0, followup:1, ceka:2, ticho:3, hotovo:4, lead:5, odmitl:6 };
   list.sort((a,b) => order[st.get(a.id).k] - order[st.get(b.id).k] || (st.get(a.id).due||'9').localeCompare(st.get(b.id).due||'9') || ((st.get(b.id).v?.last?.t)||'').localeCompare((st.get(a.id).v?.last?.t)||'') || (b.sent_date||'').localeCompare(a.sent_date||''));
   const FU = ['followup','fu1','fu2'];
   const chips = FU.includes(f) ? [['followup','1. i 2. follow-up', cntN(1) + cntN(2)], ['fu1','Jen 1. follow-up', cntN(1)], ['fu2','Jen 2. follow-up', cntN(2)]] : [];
@@ -821,7 +836,8 @@ function vLeady(v){
   };
 
   v.innerHTML = pageTop('Leady', 'Od nalezené firmy po odpověď. Kdo odpoví se zájmem, přejde do Klientů.', BTN_CLIENT) + `
-  <div class="flow">
+  ${repliesBox(true)}
+  <div class="flow mt">
     ${BUCKETS.map(([k,t,d]) => `<button class="flow-step ${f===k || (k==='followup' && (f==='fu1'||f==='fu2')) || (f==='akce' && (k==='zavolat'||k==='followup')) ? 'on' : ''} f-${k}" data-lf="${k}"><span class="n">${cnt(k)}</span><span class="t">${t}</span><span class="d">${SHARED.includes(k) ? d + ' · volají oba' : `<span class="drawers">${DRAWERS.map(([m,n]) => `<span>${n} <b>${cntBy(k,m)}</b></span>`).join('')}</span>`}</span></button>`).join('')}
   </div>
   <div class="chips mt" style="align-items:center"><span class="muted" style="font-size:13px;margin-right:4px">Šuplík:</span>${[['','Oba'],...DRAWERS.map(([m,n]) => [m, n + ' · ' + m])].map(([k,t]) => `<button class="chip" data-drawer="${k}" aria-pressed="${S.leadBy===k}">${t}</button>`).join('')}</div>
@@ -873,7 +889,7 @@ function openReply(c, mode){
     const d = Object.fromEntries(new FormData(form)); const t = today();
     const label = { zajem:'má zájem', schuzka:'domluvená schůzka', pozdeji:'ozvat se později', odmitl:'nemá zájem', nezveda:'nezvedá' }[d.res];
     const line = `[${t}] ${mode === 'hovor' ? 'Hovor' : 'Odpověď'}: ${label}${d.text ? ' – ' + d.text : ''}`;
-    const patch = { note: ((c.note || '') + '\n' + line).trim() };
+    const patch = { note: ((c.note || '') + '\n' + line).trim(), reply_new: 0 };
     if (mode === 'hovor') patch.last_call = t;
     if (d.res !== 'nezveda') patch.stage = d.res;
     if (['zajem','schuzka','pozdeji'].includes(d.res)) { patch.next_date = d.next_date; patch.next_action = d.next_action || (d.res === 'schuzka' ? 'Schůzka' : d.res === 'pozdeji' ? 'Ozvat se' : 'Navázat'); }
@@ -1123,7 +1139,7 @@ function openLog(){
 
 /* ---------- události ---------- */
 document.addEventListener('click', async e => {
-  const t = e.target.closest('[data-close],[data-act],[data-open],[data-done],[data-money],[data-paid],[data-stage-to],[data-lf],[data-mf],[data-own],[data-drawer],[data-reply],[data-fu],[data-goto],[data-week],[data-del-act],[data-stop]');
+  const t = e.target.closest('[data-close],[data-act],[data-open],[data-done],[data-money],[data-paid],[data-stage-to],[data-lf],[data-mf],[data-own],[data-drawer],[data-seen-reply],[data-reply],[data-fu],[data-goto],[data-week],[data-del-act],[data-stop]');
   if (!t) return;
   if (t.hasAttribute('data-stop')) return;
   if (t.hasAttribute('data-close')) { dlg.close(); return; }
@@ -1140,6 +1156,7 @@ document.addEventListener('click', async e => {
   if (t.dataset.paid) { e.stopPropagation(); try { const r = await api('PATCH','/api/money/'+t.dataset.paid, { status:'zaplaceno' }); upsert(S.money, r); toast('Označeno jako zaplacené'); render(); } catch (err) { toast(err.message, true); } return; }
   if (t.dataset.money) return openMoney(S.money.find(m => m.id === +t.dataset.money));
   if (t.dataset.lf) { S.leadFilter = t.dataset.lf; return render(); }
+  if (t.dataset.seenReply) { e.stopPropagation(); try { const r = await api('PATCH','/api/clients/'+t.dataset.seenReply, { reply_new:0 }); upsert(S.clients, r); render(); } catch (err) { toast(err.message, true); } return; }
   if (t.dataset.drawer !== undefined) { S.leadBy = t.dataset.drawer; store.set('rx_drawer', S.leadBy); return render(); }
   if (t.dataset.own !== undefined) { S.owner = t.dataset.own; return render(); }
   if (t.dataset.mf) { S.moneyFilter = t.dataset.mf; return render(); }
