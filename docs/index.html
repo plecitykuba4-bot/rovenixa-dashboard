@@ -262,6 +262,12 @@ table.leads td{vertical-align:top}
 .fu-done .row{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-top:1px solid var(--line);cursor:pointer}
 .replies{border-color:var(--ok);padding:14px 18px}
 .row.visit{align-items:flex-start}.row.visit .vd{display:block;font-size:12.5px;color:var(--ink-3);font-weight:400}.row.visit.clovek b,.row.visit.clovek2 b{color:var(--ok)}.row.visit.robot b{color:var(--ink-3);font-weight:500}
+.feed{list-style:none;margin:0;padding:0}
+.fd-day{font-size:12.5px;font-weight:600;color:var(--ink-3);padding:16px 0 4px}.fd-day:first-child{padding-top:0}.fd-day::first-letter{text-transform:uppercase}
+.fd{display:flex;gap:12px;padding:9px 0;border-top:1px solid var(--line)}.fd-day+.fd{border-top:0}
+.fd-time{flex:none;width:40px;font-size:13px;color:var(--ink-3);font-variant-numeric:tabular-nums;padding-top:3px}
+.fd-b{min-width:0;font-size:14.5px;line-height:1.5}.fd-b b{cursor:pointer;font-weight:600}.fd-b b:hover{color:var(--gold)}.fd-b .stage{margin-right:4px}
+.fd-q{color:var(--ink-2);font-size:13.5px;margin-top:2px;line-height:1.45}
 .brief{display:flex;gap:16px;align-items:flex-start;padding:16px 20px}
 .brief-btn{flex:none;width:52px;height:52px;border-radius:50%;border:0;background:var(--gold);color:#FFFDF9;display:grid;place-items:center;cursor:pointer;transition:background .15s,transform .15s}
 .brief-btn:hover{background:var(--gold-2)}.brief-btn:active{transform:scale(.96)}.brief-btn:focus-visible{outline:2px solid var(--gold-3);outline-offset:3px}
@@ -641,6 +647,41 @@ async function toggleBrief(){
 }
 document.addEventListener('click', e => { if (e.target.closest('[data-brief]')) toggleBrief(); });
 
+/* ---------- log „Co se stalo“: aktivita (přesný čas zápisu) + odpovědi z Gmailu s výsledkem ---------- */
+const FEED_ACT = { web:['Web hotový','s-novy'], odeslano:['Návrh odeslán','s-odeslano'], followup:['Follow-up odeslán','s-followup'],
+  hovor:['Telefonát','s-zavolat'], odpoved:['Odpověď · má zájem','s-zajem'], schuzka:['Domluvená schůzka','s-schuzka'], uzavreno:['Prodáno','s-uzavreny'] };
+const FEED_REPLY = { odmitl:['Odpověď · nemá zájem','s-odmitl'], zajem:['Odpověď · má zájem','s-zajem'], schuzka:['Odpověď · chce schůzku','s-schuzka'],
+  pozdeji:['Odpověď · ozvat se později','s-pozdeji'], nabidka:['Odpověď · chce nabídku','s-nabidka'], uzavreny:['Odpověď · koupil','s-uzavreny'] };
+function feedItems(){
+  const utc = s => s ? new Date(String(s).replace(' ', 'T') + (/[Z+]/.test(s) ? '' : 'Z')) : null;
+  const replyDays = new Set(S.clients.filter(c => c.reply_at).map(c => c.id + '|' + c.reply_at.slice(0, 10)));
+  const out = [];
+  S.activity.forEach(a => {
+    const f = FEED_ACT[a.kind]; const at = utc(a.created_at); if (!f || !at || isNaN(at)) return;
+    if (a.kind === 'odpoved' && a.client_id && replyDays.has(a.client_id + '|' + a.date)) return;
+    const c = a.client_id ? client(a.client_id) : null;
+    out.push({ at, label: !c && a.count > 1 ? `${a.count}× ${f[0].toLowerCase()}` : f[0], cls: f[1], c, name: c ? c.name : (a.note || ''), who: a.actor });
+  });
+  S.clients.filter(c => c.reply_at).forEach(c => {
+    const r = +c.reply_new ? ['Odepsal · zatím nezařazeno', 's-zavolat'] : (FEED_REPLY[c.stage] || ['Odepsal', 's-odeslano']);
+    out.push({ at: new Date(c.reply_at), label: r[0], cls: r[1], c, name: c.name, quote: gist(c.reply_text) });
+  });
+  return out.filter(x => !isNaN(x.at)).sort((a, b) => b.at - a.at);
+}
+function feedList(){
+  const xs = feedItems(); if (!xs.length) return '<div class="empty">Zatím se nic nezapsalo.</div>';
+  const lim = S.feedAll ? 150 : 15;
+  const dayOf = d => { const s = iso(d); return s === today() ? 'Dnes' : s === addDays(today(), -1) ? 'Včera' : d.toLocaleDateString('cs-CZ', { weekday:'long', day:'numeric', month:'numeric' }); };
+  let day = '', html = '';
+  xs.slice(0, lim).forEach(x => {
+    const d = dayOf(x.at); if (d !== day) { html += `<li class="fd-day">${d}</li>`; day = d; }
+    html += `<li class="fd"><span class="fd-time">${x.at.toLocaleTimeString('cs-CZ', { hour:'2-digit', minute:'2-digit' })}</span><div class="fd-b">
+      <div><span class="stage ${x.cls}">${esc(x.label)}</span> ${x.c ? `<b data-open="${x.c.id}">${esc(x.name)}</b>` : `<b>${esc(x.name)}</b>`}${x.who ? `<span class="muted"> · ${esc(x.who)}</span>` : ''}</div>
+      ${x.quote ? `<div class="fd-q">„${esc(x.quote)}“</div>` : ''}</div></li>`;
+  });
+  return `<ul class="feed">${html}</ul>${xs.length > 15 ? `<button class="btn sm ghost" data-act="feed-all" style="margin-top:8px">${S.feedAll ? 'Zobrazit méně' : `Zobrazit starší (${Math.min(xs.length, 150) - 15})`}</button>` : ''}`;
+}
+
 function lastNote(c){
   const n = String(c.note || '').trim(); if (!n) return '';
   const parts = n.split(/\n/).filter(Boolean);
@@ -786,12 +827,8 @@ function vPrehled(v){
 
   <div class="grid cols-2 mt">
     <div class="card">
-      <div class="card-h"><h2>Domluvené termíny</h2><span class="muted" style="font-size:13px">schůzky, slíbené hovory, připomenutí</span></div>
-      ${todo.length ? `<ul class="todo">${(S.todoAll ? todo : todo.slice(0,8)).map(c => `<li>
-        ${datePill(c.next_date)}
-        <div class="t" data-open="${c.id}"><b>${esc(c.name)}</b><span>${esc(c.next_action || ST[c.stage])}${c.phone ? ' · ' + esc(c.phone) : ''}${c.owner ? ' · ' + esc(c.owner) : ''}</span></div>
-        <button class="btn sm" data-done="${c.id}" title="Vyřízeno">${ico('check',15)}<span class="hide-m">Vyřízeno</span></button>
-      </li>`).join('')}</ul>${todo.length > 8 ? `<button class="btn sm ghost" data-act="todo-all" style="margin-top:8px">${S.todoAll ? 'Zobrazit méně' : `Zobrazit všechny (${todo.length})`}</button>` : ''}` : `<div class="empty">Nic naplánovaného. Datum „Ozvat se“ nastavíte v kartě klienta.</div>`}
+      <div class="card-h"><h2>Co se stalo</h2><span class="muted" style="font-size:13px">nejnovější nahoře</span></div>
+      ${feedList()}
       ${pend.length ? `<div class="sub-list"><h3>Kdo má zaplatit</h3>${pend.map(m => `<div class="row" style="cursor:pointer" data-money="${m.id}"><span>${esc(m.label || client(m.client_id)?.name || 'Platba')}<span class="muted"> · od ${fd(m.date)}</span></span><b>${kc(m.amount)}</b></div>`).join('')}</div>` : ''}
     </div>
     <div class="card">
@@ -1256,6 +1293,7 @@ document.addEventListener('click', async e => {
   if (t.dataset.act === 'new-money') return openMoney();
   if (t.dataset.act === 'new-log') return openLog();
   if (t.dataset.act === 'todo-all') { S.todoAll = !S.todoAll; return render(); }
+  if (t.dataset.act === 'feed-all') { S.feedAll = !S.feedAll; return render(); }
   if (t.dataset.act === 'toggle-lost') { S.showLost = !S.showLost; return render(); }
   if (t.dataset.goto) { S.leadFilter = t.dataset.goto; return; }
   if (t.dataset.reply) { e.stopPropagation(); return openReply(client(t.dataset.reply), t.dataset.mode); }
