@@ -3,7 +3,7 @@
 
 const TABLES = {
   clients: ['name', 'person', 'phone', 'email', 'city', 'web', 'preview', 'stage', 'price',
-    'next_date', 'next_action', 'sent_date', 'note', 'source', 'made_by', 'owner'],
+    'next_date', 'next_action', 'sent_date', 'note', 'source', 'made_by', 'owner', 'typ'],
   money: ['date', 'kind', 'amount', 'status', 'client_id', 'label'],
   activity: ['date', 'actor', 'kind', 'count', 'client_id', 'note'],
 };

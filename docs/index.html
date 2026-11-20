@@ -219,6 +219,24 @@ dialog::backdrop{background:rgba(35,28,16,.38);backdrop-filter:blur(2px)}
 .dup{border:1px solid #E8C9A0;background:#FBF1E2;border-radius:14px;padding:12px 14px;margin-bottom:14px;font-size:14px}
 .dup .row{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:8px}
 .own{width:24px;height:24px;font-size:11px;margin-left:auto}
+.funnel{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.fstep{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:14px 16px;position:relative}
+.fstep .lab{font-size:13px;color:var(--ink-3);font-weight:550}
+.fstep .big{font-family:"Gloock",serif;font-size:32px;line-height:1.15;margin-top:4px}
+.fstep .foot{font-size:13px;color:var(--ink-3);margin-top:2px}
+.fbar{height:6px;border-radius:9px;background:var(--paper-2);margin-top:10px;overflow:hidden}
+.fbar i{display:block;height:100%;background:var(--gold-2);border-radius:9px}
+.fstep.win{background:var(--ok-bg);border-color:#CBDDBE}.fstep.win .fbar i{background:var(--ok)}
+@media (max-width:860px){.funnel{grid-template-columns:1fr 1fr}.fstep .big{font-size:24px}}
+.s-typ{background:#EFE9DD;color:#5A4E3C}.s-typ::before{display:none}
+.pay-box{background:var(--gold-bg-2);border:1px solid var(--line);border-radius:14px;padding:12px 14px 2px;margin-bottom:14px}
+details.more{border-top:1px solid var(--line);margin-top:4px;padding-top:12px}
+details.more summary{cursor:pointer;font-weight:600;color:var(--ink-2);font-size:14px;list-style:none}
+details.more summary::-webkit-details-marker{display:none}
+details.more summary::before{content:"+ "}
+details.more[open] summary::before{content:"– "}
+.pill-btn{border:0;cursor:pointer;font:inherit;font-size:12px;font-weight:650}
+.pill-btn:hover{filter:brightness(.96)}
 .toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,20px);background:var(--card);border:1px solid var(--line-2);color:var(--ink);padding:10px 18px;border-radius:999px;font-weight:600;font-size:14px;box-shadow:var(--shadow);opacity:0;transition:all .3s var(--ease);z-index:50;pointer-events:none}
 .toast.on{opacity:1;transform:translate(-50%,0)}
 .toast.bad{color:var(--bad)}
@@ -343,6 +361,8 @@ const VIEWS = [
 const S = { user:null, token:null, clients:[], money:[], activity:[], view:'prehled',
   leadFilter:'all', leadQ:'', leadBy:'', showLost:false, week:0, moneyFilter:'all', owner:'', lastSync:null };
 const PEOPLE = ['Jakub','Jan'];
+const TYPES = [['web','Web'],['aplikace','Aplikace'],['eshop','E-shop'],['jine','Jiné']];
+const TYP = Object.fromEntries(TYPES);
 
 /* ---------- pomocné ---------- */
 const $ = (s, r=document) => r.querySelector(s);
@@ -432,9 +452,7 @@ async function setStage(c, stage){
     if (STAGE_KIND[stage]) await logAct(STAGE_KIND[stage], 1, { client_id: c.id, note: c.name });
     toast(`${c.name} → ${ST[stage]}`);
     render();
-    if (stage === 'uzavreny' && !S.money.some(m => m.client_id === c.id)) {
-      openMoney({ client_id: c.id, amount: c.price || 6999, status: 'ceka', label: 'Web – ' + c.name, kind: 'prijem', date: today() }, true);
-    }
+    if (stage === 'uzavreny' && !S.money.some(m => m.client_id === c.id)) openClient(client(c.id));
   } catch (err) { toast(err.message, true); }
 }
 
@@ -495,8 +513,15 @@ function vPrehled(v){
   const wk = monday(t), wkPrev = addDays(wk, -7);
   const cur = sumAct(wk, addDays(wk,6)), prev = sumAct(wkPrev, addDays(wkPrev,6));
   const todo = todoItems();
-  const sent = S.clients.filter(c => c.sent_date).length;
-  const replied = S.clients.filter(c => c.sent_date && ['zajem','schuzka','pozdeji','uzavreny'].includes(c.stage)).length;
+  const sentL = S.clients.filter(c => c.sent_date);
+  const bounced = c => c.stage === 'odmitl' && /nedoruč|vrátil/i.test(c.note || '');
+  const sent = sentL.filter(c => !bounced(c)).length;
+  const fRep = sentL.filter(c => ['zajem','schuzka','pozdeji','uzavreny'].includes(c.stage) || (c.stage === 'odmitl' && !bounced(c))).length;
+  const fInt = sentL.filter(c => ['zajem','schuzka','uzavreny'].includes(c.stage)).length;
+  const fBuy = sentL.filter(c => c.stage === 'uzavreny').length;
+  const fNo = sentL.filter(c => c.stage === 'odmitl' && !bounced(c)).length;
+  const pct = (a, b) => b ? (a / b * 100).toLocaleString('cs-CZ', { maximumFractionDigits: a / b < .1 ? 1 : 0 }) + ' %' : '0 %';
+  const sold = closed.filter(c => c.price > 0);
 
   v.innerHTML = pageTop(hello, new Date().toLocaleDateString('cs-CZ',{weekday:'long', day:'numeric', month:'long'}), BTN_CLIENT + BTN_MONEY + BTN_LOG) + `
   <div class="grid kpis">
@@ -504,12 +529,22 @@ function vPrehled(v){
     <div class="card kpi"><div class="lab">Tento měsíc</div><div class="val">${kc(income(m0s,m0e))}</div><div class="foot">${delta(income(m0s,m0e), income(m1s,m1e), 'kc')}</div></div>
     <div class="card kpi"><div class="lab">Čeká na zaplacení</div><div class="val">${kc(pendSum)}</div><div class="foot">${pend.length ? pend.length + (pend.length===1?' platba':' plateb') : 'nikdo nedluží'}</div></div>
     <div class="card kpi"><div class="lab">Rozjednaní klienti</div><div class="val">${active.length}</div><div class="foot">${closed.length} uzavřených celkem</div></div>
-    <div class="card kpi"><div class="lab">Kladná odpověď</div><div class="val">${sent ? Math.round(replied/sent*100) : 0} %</div><div class="foot">${replied} kladných z ${sent} odeslaných</div></div>
+    <div class="card kpi"><div class="lab">Prodané zakázky</div><div class="val">${closed.length}</div><div class="foot">${sold.length} placených · ${closed.length - sold.length} zdarma</div></div>
+  </div>
+
+  <div class="card mt">
+    <div class="card-h"><h2>Úspěšnost oslovení</h2><span class="muted" style="font-size:13px">firmy, kterým odešel návrh e-mailem</span></div>
+    <div class="funnel">
+      <div class="fstep"><div class="lab">Odesláno</div><div class="big">${sent}</div><div class="foot">návrhů webu</div></div>
+      <div class="fstep"><div class="lab">Odpovědělo</div><div class="big">${pct(fRep, sent)}</div><div class="foot">${fRep} firem · z toho ${fNo} ne</div><div class="fbar"><i style="width:${sent?fRep/sent*100:0}%"></i></div></div>
+      <div class="fstep"><div class="lab">Projevilo zájem</div><div class="big">${pct(fInt, sent)}</div><div class="foot">${fInt} firem · ${pct(fInt, fRep)} z odpovědí</div><div class="fbar"><i style="width:${sent?fInt/sent*100:0}%"></i></div></div>
+      <div class="fstep win"><div class="lab">Koupilo</div><div class="big">${pct(fBuy, sent)}</div><div class="foot">${fBuy} firem · ${pct(fBuy, fInt)} ze zájemců</div><div class="fbar"><i style="width:${sent?fBuy/sent*100:0}%"></i></div></div>
+    </div>
   </div>
 
   <div class="grid cols-2 mt">
     <div class="card">
-      <div class="card-h"><h2>Na řadě</h2><span class="muted" style="font-size:13px">komu napsat a zavolat · 14 dní</span></div>
+      <div class="card-h"><h2>Na řadě</h2><span class="muted" style="font-size:13px">komu napsat, zavolat, poslat follow-up</span></div>
       ${todo.length ? `<ul class="todo">${todo.map(c => `<li>
         ${datePill(c.next_date)}
         <div class="t" data-open="${c.id}"><b>${esc(c.name)}</b><span>${esc(c.next_action || ST[c.stage])}${c.phone ? ' · ' + esc(c.phone) : ''}${c.owner ? ' · ' + esc(c.owner) : ''}</span></div>
@@ -577,7 +612,8 @@ function kcard(c){
   return `<div class="kcard" draggable="true" data-open="${c.id}" data-drag="${c.id}">
     <div style="display:flex;gap:8px;align-items:flex-start"><b>${esc(c.name)}</b>${c.owner ? `<span class="avatar own" title="Řeší ${esc(c.owner)}">${initials(c.owner)}</span>` : ''}</div>
     <div class="meta">${c.city ? esc(c.city) : ''}${c.price ? `<span>· ${kc(c.price)}</span>` : ''}
-      ${c.stage==='uzavreny' ? (pendSum ? `<span class="date-pill late">dluží ${kc(pendSum)}</span>` : paidSum ? `<span class="date-pill" style="background:var(--ok-bg);color:var(--ok)">zaplaceno</span>` : '') : ''}
+      ${c.typ ? `<span class="stage s-typ">${TYP[c.typ]||esc(c.typ)}</span>` : ''}
+      ${c.stage==='uzavreny' ? (pendSum ? `<button class="date-pill late pill-btn" data-paid="${paid.find(m=>m.status==='ceka').id}" title="Označit jako zaplacené">dluží ${kc(pendSum)} · zaplatil?</button>` : paidSum ? `<span class="date-pill" style="background:var(--ok-bg);color:var(--ok)">zaplaceno</span>` : (!c.price ? '<span class="date-pill">zdarma</span>' : '')) : ''}
     </div>
     ${c.next_date || c.next_action ? `<div class="nx">${c.next_date ? datePill(c.next_date) + ' ' : ''}${esc(c.next_action)}</div>` : ''}
   </div>`;
@@ -706,10 +742,14 @@ function vAktivita(v){
 const dlg = $('#dlg');
 function openDlg(html){ dlg.innerHTML = html; if (!dlg.open) dlg.showModal(); }
 dlg.addEventListener('close', () => render());
-dlg.addEventListener('click', e => { if (e.target === dlg) dlg.close(); });
+let downOnBackdrop = false;
+dlg.addEventListener('mousedown', e => { downOnBackdrop = e.target === dlg; });
+dlg.addEventListener('click', e => { if (e.target === dlg && downOnBackdrop) dlg.close(); downOnBackdrop = false; });
 
 function openClient(c = {}, preset = {}){
-  const isNew = !c.id; c = { stage:'zajem', price:6999, made_by:'', ...c, ...preset };
+  const isNew = !c.id; c = { stage:'zajem', price:'', made_by:'', typ:'web', ...c, ...preset };
+  const myPays = isNew ? [] : S.money.filter(m => m.client_id === c.id && m.kind === 'prijem');
+  const payNow = myPays.some(m => m.status === 'ceka') ? 'dluzi' : myPays.length ? 'zaplaceno' : (!isNew && c.stage === 'uzavreny' && !c.price) ? 'zdarma' : 'zaplaceno';
   const pays = isNew ? [] : S.money.filter(m => m.client_id === c.id);
   const acts = isNew ? [] : S.activity.filter(a => a.client_id === c.id).slice(0,8);
   const opt = (arr, cur) => arr.map(x => `<option ${x===cur?'selected':''}>${esc(x)}</option>`).join('');
@@ -720,20 +760,30 @@ function openClient(c = {}, preset = {}){
       ${!isNew ? `<div class="links">${c.phone?`<a href="tel:${esc(c.phone.replace(/\s/g,''))}">Zavolat ${esc(c.phone)}</a>`:''}${c.email?`<a href="mailto:${esc(c.email.split(',')[0].trim())}">Napsat e-mail</a>`:''}${c.preview?`<a href="${esc(href(c.preview))}" target="_blank" rel="noopener">Náhled webu</a>`:''}${c.web?`<a href="${esc(href(c.web))}" target="_blank" rel="noopener">Starý web</a>`:''}</div>` : ''}
       <div class="stage-pick" role="radiogroup" aria-label="Fáze">${STAGES.map(s => `<label><input type="radio" name="stage" value="${s.k}" ${c.stage===s.k?'checked':''}><span class="stage s-${s.k}">${s.t}</span></label>`).join('')}</div>
       <div class="dup hidden" id="dup"></div>
+      <div class="stage-pick" role="radiogroup" aria-label="Co děláme">${TYPES.map(([k,t]) => `<label><input type="radio" name="typ" value="${k}" ${(c.typ||'web')===k?'checked':''}><span class="stage s-typ">${t}</span></label>`).join('')}</div>
       <div class="form-grid">
-        ${f('name','Firma / jméno *','text',true,'required')}
-        ${f('person','Kontaktní osoba')}${f('phone','Telefon','tel')}
-        ${f('email','E-mail')}${f('city','Město')}
-        ${f('next_date','Ozvat se dne','date')}${f('next_action','Co udělat (napsat, zavolat…)')}
-        ${f('price','Cena (Kč)','number')}${f('sent_date','Návrh odeslán','date')}
-        ${f('preview','Náhled webu (odkaz)')}${f('web','Současný web')}
-        <label class="field"><span>Web dělal</span><select class="inp" name="made_by"><option value="">—</option>${opt(actors(), c.made_by)}</select></label>
-        ${f('source','Zdroj (odkud lead)')}
-        <label class="field"><span>Klienta řeší</span><select class="inp" name="owner"><option value="">— zatím nikdo —</option>${opt(PEOPLE, c.owner)}</select></label>
-        <label class="field full"><span>Poznámka</span><textarea class="inp" name="note">${esc(c.note)}</textarea></label>
+        ${f('name','Jméno / firma *','text',false,'required autocomplete="off"')}
+        ${f('price','Cena (Kč)','number',false,'min="0" placeholder="např. 6999"')}
+        <div class="full pay-box ${c.stage==='uzavreny'?'':'hidden'}" id="payBox">
+          <div class="stage-pick" role="radiogroup" aria-label="Platba" style="margin-bottom:10px">${[['zaplaceno','Zaplaceno','s-uzavreny'],['dluzi','Ještě dluží','s-schuzka'],['zdarma','Zdarma','s-odmitl']].map(([k,t,cl]) => `<label><input type="radio" name="pay" value="${k}" ${payNow===k?'checked':''}><span class="stage ${cl}">${t}</span></label>`).join('')}</div>
+          <label class="field" style="max-width:260px"><span>Kdy prodáno</span><input class="inp" type="date" name="pay_date" value="${esc((myPays[0]||{}).date || today())}"></label>
+        </div>
+        ${f('phone','Telefon','tel')}${f('email','E-mail','email')}
+        ${f('next_date','Ozvat se dne','date')}${f('next_action','Co udělat')}
+        <label class="field full"><span>Poznámka</span><textarea class="inp" name="note" rows="2">${esc(c.note)}</textarea></label>
       </div>
+      <details class="more">
+        <summary>Další údaje</summary>
+        <div class="form-grid" style="margin-top:12px">
+          ${f('person','Kontaktní osoba')}${f('city','Město')}
+          ${f('preview','Náhled webu (odkaz)')}${f('web','Současný web')}
+          ${f('sent_date','Návrh odeslán','date')}${f('source','Odkud klient je')}
+          <label class="field"><span>Web dělal</span><select class="inp" name="made_by"><option value="">—</option>${opt(actors(), c.made_by)}</select></label>
+          <label class="field"><span>Klienta řeší</span><select class="inp" name="owner"><option value="">— zatím nikdo —</option>${opt(PEOPLE, c.owner)}</select></label>
+        </div>
+      </details>
       ${!isNew ? `<div class="sub-list"><div class="card-h" style="margin-bottom:4px"><h3>Platby</h3><button type="button" class="btn sm" data-act="client-money">${ico('plus',14)}Platba</button></div>
-        ${pays.length ? pays.map(m => `<div class="row"><span>${fd(m.date)} · ${esc(m.label)} ${m.status==='ceka'?'<span class="date-pill late">čeká</span>':''}</span><b>${m.kind==='vydaj'?'−':''}${kc(m.amount)}</b></div>`).join('') : '<div class="muted" style="font-size:14px">Zatím žádné.</div>'}
+        ${pays.length ? pays.map(m => `<div class="row"><span>${fd(m.date)} · ${esc(m.label)} ${m.status==='ceka'?`<span class="date-pill late">dluží</span> <button type="button" class="btn sm" data-paid-in="${m.id}">${ico('check',14)}Zaplatil</button>`:''}</span><b>${m.kind==='vydaj'?'−':''}${kc(m.amount)}</b></div>`).join('') : '<div class="muted" style="font-size:14px">Zatím žádné.</div>'}
         ${acts.length ? `<h3 style="margin-top:14px">Historie</h3>${acts.map(a => `<div class="row"><span>${fd(a.date)} · ${esc(KINDS[a.kind]||a.kind)}</span><span class="muted">${esc(a.actor)}</span></div>`).join('')}` : ''}
         <div class="muted" style="font-size:12.5px;margin-top:10px">Naposledy upravil ${esc(c.updated_by||'—')} · ${fd(c.updated_at)}</div></div>` : ''}
     </div>
@@ -741,6 +791,10 @@ function openClient(c = {}, preset = {}){
       <button type="button" class="btn" data-close>Zrušit</button><button class="btn gold" type="submit">Uložit</button></div>
   </form>`);
   const form = $('#cf');
+  form.addEventListener('change', e => { if (e.target.name === 'stage') $('#payBox').classList.toggle('hidden', e.target.value !== 'uzavreny'); });
+  form.querySelectorAll('[data-paid-in]').forEach(b => b.addEventListener('click', async () => {
+    try { const r = await api('PATCH','/api/money/'+b.dataset.paidIn, { status:'zaplaceno' }); upsert(S.money, r); toast('Zaplaceno'); openClient(client(c.id)); } catch (err) { toast(err.message, true); }
+  }));
   if (isNew) {
     const chk = () => {
       const d = Object.fromEntries(new FormData(form));
@@ -763,16 +817,38 @@ function openClient(c = {}, preset = {}){
   form.addEventListener('submit', async e => {
     e.preventDefault();
     const d = Object.fromEntries(new FormData(form)); d.price = +d.price || 0;
+    const pay = d.pay, payDate = d.pay_date || today(); delete d.pay; delete d.pay_date;
+    if (d.stage === 'uzavreny' && pay === 'zdarma') d.price = 0;
     const oldStage = c.stage;
     try {
       const r = isNew ? await api('POST','/api/clients', d) : await api('PATCH','/api/clients/'+c.id, d);
       upsert(S.clients, r);
       if ((isNew || oldStage !== r.stage) && STAGE_KIND[r.stage]) await logAct(STAGE_KIND[r.stage], 1, { client_id: r.id, note: r.name });
+      if (r.stage === 'uzavreny' && pay !== 'zdarma') await syncPay(r, pay, payDate);
       dlg.close(); toast(isNew ? 'Klient přidán' : 'Uloženo');
-      if (r.stage === 'uzavreny' && oldStage !== 'uzavreny' && !S.money.some(m => m.client_id === r.id))
-        setTimeout(() => openMoney({ client_id:r.id, amount:r.price||6999, status:'ceka', label:'Web – '+r.name, kind:'prijem', date:today() }, true), 50);
     } catch (err) { toast(err.message, true); }
   });
+}
+
+/* platba z karty klienta: Zaplaceno / Ještě dluží */
+async function syncPay(r, pay, date){
+  const mine = S.money.filter(m => m.client_id === r.id && m.kind === 'prijem');
+  const status = pay === 'dluzi' ? 'ceka' : 'zaplaceno';
+  if (!mine.length) {
+    if (!r.price) return;
+    const m = await api('POST','/api/money', { client_id:r.id, amount:r.price, status, kind:'prijem', date, label:`${TYP[r.typ]||'Zakázka'} – ${r.name}` });
+    upsert(S.money, m); return;
+  }
+  for (const m of mine) {
+    const patch = {};
+    if (status === 'zaplaceno' && m.status === 'ceka') patch.status = 'zaplaceno';
+    if (mine.length === 1) {
+      if (m.date !== date) patch.date = date;
+      if (r.price && m.amount !== r.price) patch.amount = r.price;
+      if (status === 'ceka' && m.status !== 'ceka') patch.status = 'ceka';
+    }
+    if (Object.keys(patch).length) upsert(S.money, await api('PATCH','/api/money/'+m.id, patch));
+  }
 }
 
 function openMoney(m = {}, fromClose = false, back = null){
@@ -838,7 +914,7 @@ document.addEventListener('click', async e => {
   if (t.dataset.act === 'toggle-lost') { S.showLost = !S.showLost; return render(); }
   if (t.dataset.stageTo) { e.stopPropagation(); return setStage(client(t.dataset.id), t.dataset.stageTo); }
   if (t.dataset.done) { const c = client(t.dataset.done); try { const r = await api('PATCH','/api/clients/'+c.id, { next_date:'', next_action:'' }); upsert(S.clients, r); toast('Vyřízeno – ' + c.name); render(); } catch (err) { toast(err.message, true); } return; }
-  if (t.dataset.paid) { e.stopPropagation(); try { const r = await api('PATCH','/api/money/'+t.dataset.paid, { status:'zaplaceno', date: today() }); upsert(S.money, r); toast('Označeno jako zaplacené'); render(); } catch (err) { toast(err.message, true); } return; }
+  if (t.dataset.paid) { e.stopPropagation(); try { const r = await api('PATCH','/api/money/'+t.dataset.paid, { status:'zaplaceno' }); upsert(S.money, r); toast('Označeno jako zaplacené'); render(); } catch (err) { toast(err.message, true); } return; }
   if (t.dataset.money) return openMoney(S.money.find(m => m.id === +t.dataset.money));
   if (t.dataset.lf) { S.leadFilter = t.dataset.lf; return render(); }
   if (t.dataset.own !== undefined) { S.owner = t.dataset.own; return render(); }
