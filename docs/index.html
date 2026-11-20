@@ -268,6 +268,7 @@ table.leads td{vertical-align:top}
 .fd-time{flex:none;width:40px;font-size:13px;color:var(--ink-3);font-variant-numeric:tabular-nums;padding-top:3px}
 .fd-b{min-width:0;font-size:14.5px;line-height:1.5}.fd-b b{cursor:pointer;font-weight:600}.fd-b b:hover{color:var(--gold)}.fd-b .stage{margin-right:4px}
 .fd-q{color:var(--ink-2);font-size:13.5px;margin-top:2px;line-height:1.45}
+.fd-list{margin-top:4px;font-size:13.5px;color:var(--ink-2)}.fd-list summary{cursor:pointer;color:var(--ink-3)}.fd-list b{font-weight:500}
 .brief{display:flex;gap:16px;align-items:flex-start;padding:16px 20px}
 .brief-btn{flex:none;width:52px;height:52px;border-radius:50%;border:0;background:var(--gold);color:#FFFDF9;display:grid;place-items:center;cursor:pointer;transition:background .15s,transform .15s}
 .brief-btn:hover{background:var(--gold-2)}.brief-btn:active{transform:scale(.96)}.brief-btn:focus-visible{outline:2px solid var(--gold-3);outline-offset:3px}
@@ -657,16 +658,31 @@ function feedItems(){
   const replyDays = new Set(S.clients.filter(c => c.reply_at).map(c => c.id + '|' + c.reply_at.slice(0, 10)));
   const out = [];
   S.activity.forEach(a => {
-    const f = FEED_ACT[a.kind]; const at = utc(a.created_at); if (!f || !at || isNaN(at)) return;
+    const f = FEED_ACT[a.kind]; const w = utc(a.created_at); if (!f || !w || isNaN(w)) return;
     if (a.kind === 'odpoved' && a.client_id && replyDays.has(a.client_id + '|' + a.date)) return;
     const c = a.client_id ? client(a.client_id) : null;
-    out.push({ at, label: !c && a.count > 1 ? `${a.count}× ${f[0].toLowerCase()}` : f[0], cls: f[1], c, name: c ? c.name : (a.note || ''), who: a.actor });
+    // Zapsáno zpětně (jiný den, než se to stalo): patří ke svému dni, čas neznáme.
+    const back = iso(w) !== a.date;
+    out.push({ at: back ? new Date(parse(a.date).getTime() + 1) : w, noTime: back, act: true, kind: a.kind, f,
+      label: !c && a.count > 1 ? `${a.count}× ${f[0].toLowerCase()}` : f[0], cls: f[1], c, name: c ? c.name : (a.note || ''), who: a.actor });
   });
   S.clients.filter(c => c.reply_at).forEach(c => {
     const r = +c.reply_new ? ['Odepsal · zatím nezařazeno', 's-zavolat'] : (FEED_REPLY[c.stage] || ['Odepsal', 's-odeslano']);
     out.push({ at: new Date(c.reply_at), label: r[0], cls: r[1], c, name: c.name, quote: gist(c.reply_text) });
   });
-  return out.filter(x => !isNaN(x.at)).sort((a, b) => b.at - a.at);
+  const xs = out.filter(x => !isNaN(x.at)).sort((a, b) => b.at - a.at);
+  // Dávka: aspoň 3 stejné záznamy jednoho člověka zapsané během pár minut = zapsáno najednou, ne v tu chvíli odesláno.
+  const res = [];
+  for (let i = 0; i < xs.length; i++) {
+    const x = xs[i]; let j = i;
+    while (x.act && !x.noTime && xs[j + 1] && xs[j + 1].act && !xs[j + 1].noTime && xs[j + 1].kind === x.kind && xs[j + 1].who === x.who && xs[j].at - xs[j + 1].at < 180000) j++;
+    if (j - i >= 2) {
+      const g = xs.slice(i, j + 1);
+      res.push({ at: x.at, batch: true, cls: x.cls, who: x.who, items: g, label: pl(g.length, ...(ACT_SAY[x.kind] || [x.f[0], x.f[0], x.f[0]])) });
+      i = j;
+    } else res.push(x);
+  }
+  return res;
 }
 function feedList(){
   const xs = feedItems(); if (!xs.length) return '<div class="empty">Zatím se nic nezapsalo.</div>';
@@ -675,7 +691,12 @@ function feedList(){
   let day = '', html = '';
   xs.slice(0, lim).forEach(x => {
     const d = dayOf(x.at); if (d !== day) { html += `<li class="fd-day">${d}</li>`; day = d; }
-    html += `<li class="fd"><span class="fd-time">${x.at.toLocaleTimeString('cs-CZ', { hour:'2-digit', minute:'2-digit' })}</span><div class="fd-b">
+    const hm = x.at.toLocaleTimeString('cs-CZ', { hour:'2-digit', minute:'2-digit' });
+    if (x.batch) { html += `<li class="fd"><span class="fd-time">—</span><div class="fd-b">
+      <div><span class="stage ${x.cls}">${esc(x.label)}</span><span class="muted"> · ${esc(x.who)}</span></div>
+      <div class="fd-q">Zapsáno najednou v ${hm}, ne v tu chvíli. Přesný čas jednotlivých nevíme, staly se dřív během dne.</div>
+      <details class="fd-list"><summary>Komu</summary>${x.items.map(y => y.c ? `<b data-open="${y.c.id}">${esc(y.name)}</b>` : `<b>${esc(y.name)}</b>`).join(', ')}</details></div></li>`; return; }
+    html += `<li class="fd"><span class="fd-time">${x.noTime ? '—' : hm}</span><div class="fd-b">
       <div><span class="stage ${x.cls}">${esc(x.label)}</span> ${x.c ? `<b data-open="${x.c.id}">${esc(x.name)}</b>` : `<b>${esc(x.name)}</b>`}${x.who ? `<span class="muted"> · ${esc(x.who)}</span>` : ''}</div>
       ${x.quote ? `<div class="fd-q">„${esc(x.quote)}“</div>` : ''}</div></li>`;
   });
