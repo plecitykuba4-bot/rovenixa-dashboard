@@ -931,7 +931,7 @@ function openClient(c = {}, preset = {}){
           <div class="stage-pick" role="radiogroup" aria-label="Platba" style="margin-bottom:10px">${[['zaplaceno','Zaplaceno','s-uzavreny'],['dluzi','Ještě dluží','s-schuzka'],['zdarma','Zdarma','s-odmitl']].map(([k,t,cl]) => `<label><input type="radio" name="pay" value="${k}" ${payNow===k?'checked':''}><span class="stage ${cl}">${t}</span></label>`).join('')}</div>
           <label class="field" style="max-width:260px"><span>Kdy prodáno</span><input class="inp" type="date" name="pay_date" value="${esc((myPays[0]||{}).date || today())}"></label>
         </div>
-        ${f('phone','Telefon','tel')}${f('email','E-mail','email')}
+        ${f('phone','Telefon','tel')}${f('email','E-mail','text',false,'inputmode="email"')}
         ${f('next_date','Ozvat se dne','date')}${f('next_action','Co udělat')}
         <label class="field full"><span>Poznámka</span><textarea class="inp" name="note" rows="2">${esc(c.note)}</textarea></label>
       </div>
