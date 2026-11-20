@@ -254,6 +254,12 @@ table.leads td{vertical-align:top}
 .acts{display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap}
 .seen{font-size:13px;font-weight:600;color:var(--ink-3);display:inline-flex;align-items:center;gap:4px}
 .seen.yes{color:var(--ok)}
+.leads tr.grp td{background:var(--paper-2);font-weight:650;font-size:13px;padding:8px 14px;cursor:default}
+.leads tr.grp td span{color:var(--ink-3);font-weight:500;margin-left:6px}
+.leads tr.grp.late td{background:var(--bad-bg);color:var(--bad)}
+.leads tr.fu-late td{background:#FBF1EE}
+.fu-done{margin:14px 4px 4px;font-size:14px}.fu-done summary{cursor:pointer;color:var(--ink-3);font-weight:600;padding:6px 0}
+.fu-done .row{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-top:1px solid var(--line);cursor:pointer}
 .seen-m{font-size:13px;color:var(--ink-2);margin-top:2px}.seen-m b{font-weight:650;color:var(--ink)}
 .drawers{display:flex;gap:10px;flex-wrap:wrap;font-size:12.5px;color:var(--ink-3);margin-top:2px}.drawers b{color:var(--ink);font-weight:650}
 .flow-step .d .drawers{margin-top:0}
@@ -770,7 +776,31 @@ function vLeady(v){
   const order = { zavolat:0, followup:1, ceka:2, ticho:3, hotovo:4, lead:5, odmitl:6 };
   list.sort((a,b) => order[st.get(a.id).k] - order[st.get(b.id).k] || (st.get(a.id).due||'9').localeCompare(st.get(b.id).due||'9') || ((st.get(b.id).v?.last?.t)||'').localeCompare((st.get(a.id).v?.last?.t)||'') || (b.sent_date||'').localeCompare(a.sent_date||''));
   const FU = ['followup','fu1','fu2'];
-  const chips = FU.includes(f) ? [['followup','Dnes a po termínu', cnt('followup')], ['fu1','Všechny 1. follow-upy', cntN(1)], ['fu2','Všechny 2. follow-upy', cntN(2)]] : [];
+  const chips = FU.includes(f) ? [['followup','1. i 2. follow-up', cntN(1) + cntN(2)], ['fu1','Jen 1. follow-up', cntN(1)], ['fu2','Jen 2. follow-up', cntN(2)]] : [];
+  /* follow-upy: rozpis podle termínu – po termínu (červeně), dnes, zítra, později; odeslané až úplně na konci */
+  const fuTable = () => {
+    const t0 = today(), t1 = addDays(t0, 1);
+    const want = f === 'fu1' ? [1] : f === 'fu2' ? [2] : [1, 2];
+    const rows = leads.filter(c => inDrawer(c) && ['followup','ceka'].includes(st.get(c.id).k) && want.includes(st.get(c.id).n))
+      .filter(c => !q || [c.name,c.city,c.email,c.phone,c.preview].join(' ').toLowerCase().includes(q))
+      .sort((a,b) => st.get(a.id).due.localeCompare(st.get(b.id).due) || a.name.localeCompare(b.name, 'cs'));
+    const groups = [['late','Po termínu – poslat hned', c => st.get(c.id).due < t0], ['today','Dnes', c => st.get(c.id).due === t0],
+      ['tom','Zítra', c => st.get(c.id).due === t1], ['later','Později', c => st.get(c.id).due > t1]];
+    const when = d => { const n = daysSince(d); return d === t0 ? 'dnes' : d === t1 ? 'zítra' : n > 0 ? `${n} ${n === 1 ? 'den' : n < 5 ? 'dny' : 'dní'} po termínu` : ''; };
+    const row = (c, g) => { const s2 = st.get(c.id); return `<tr data-open="${c.id}" class="${g === 'late' ? 'fu-late' : ''}">
+      <td><div class="nm">${esc(c.name)}</div><div class="sub">${esc(c.email || c.city)}${c.preview ? ` · <a href="${esc(href(c.preview))}?ja=1" target="_blank" rel="noopener" data-stop>náhled</a>` : ''}</div></td>
+      <td><span class="stage s-followup">${s2.n}. follow-up</span></td>
+      <td><span class="date-pill ${g === 'late' ? 'late' : g === 'today' ? 'today' : ''}">${fd(s2.due)}</span><div class="sub">${when(s2.due)}</div></td>
+      <td class="hide-m">${seen(c)}</td>
+      <td class="num"><div class="acts">${g === 'late' || g === 'today' ? `<button class="btn sm" data-fu="${c.id}">${ico('check',14)}Follow-up odeslán</button>` : ''}<button class="btn sm" data-reply="${c.id}" data-mode="mail">Odpověděl</button></div></td></tr>`; };
+    const done = leads.filter(c => inDrawer(c) && c.stage === 'odeslano' && (+c.followups || 0) >= MAX_FOLLOWUPS && st.get(c.id).k !== 'zavolat');
+    return `<div class="tbl-wrap"><table class="leads fu">
+      <thead><tr><th>Firma</th><th>Který</th><th>Kdy poslat</th><th class="hide-m">Viděl web</th><th class="num">Co udělat</th></tr></thead>
+      <tbody>${groups.map(([g, label, fn]) => { const xs = rows.filter(fn); return xs.length ? `<tr class="grp ${g}"><td colspan="5">${label} <span>${xs.length}</span></td></tr>` + xs.map(c => row(c, g)).join('') : ''; }).join('')}</tbody></table>
+      ${rows.length ? '' : '<div class="empty">Žádný follow-up v plánu.</div>'}
+      ${done.length && f !== 'fu1' ? `<details class="fu-done"><summary>Oba follow-upy už odeslané (${done.length})</summary>${done.map(c => `<div class="row" data-open="${c.id}"><span>${esc(c.name)}</span><span class="muted">2. follow-up ${fd(c.last_followup)} · ${esc(st.get(c.id).t)}</span></div>`).join('')}</details>` : ''}
+    </div>`;
+  };
   const MORE = [['odeslano','Odesláno – čekají'], ['ticho','Bez reakce'], ['odmitl','Odmítli'], ['vse','Všechny leady']];
 
   const actions = c => {
@@ -799,7 +829,7 @@ function vLeady(v){
       <input class="inp search" type="search" placeholder="Hledat firmu, město, telefon…" value="${esc(S.leadQ)}" id="leadQ">
       <select class="inp" id="leadMore"><option value="">Další seznamy…</option>${MORE.map(([k,t]) => `<option value="${k}" ${f===k?'selected':''}>${t} (${k==='odeslano' ? cnt('ceka') + cnt('zavolat') + cnt('followup') + cnt('ticho') : k==='vse' ? leads.filter(inDrawer).length - cnt('odmitl') : cnt(k)})</option>`).join('')}</select>
     </div>
-    <div class="tbl-wrap"><table class="leads">
+    ${FU.includes(f) ? fuTable() : `<div class="tbl-wrap"><table class="leads">
       <thead><tr><th>Firma</th><th>Stav</th><th class="hide-m">Návštěvy webu</th><th class="hide-m">Odesláno</th><th class="hide-m">Poslední zpráva</th><th class="num">Co udělat</th></tr></thead>
       <tbody>${list.slice(0,400).map(c => { const s2 = st.get(c.id); return `<tr data-open="${c.id}">
         <td><div class="nm">${esc(c.name)}</div><div class="sub">${esc(c.city)}${c.preview ? ` · <a href="${esc(href(c.preview))}?ja=1" target="_blank" rel="noopener" data-stop>náhled</a>` : ''}</div></td>
@@ -810,7 +840,7 @@ function vLeady(v){
         <td class="num"><div class="acts">${actions(c)}</div></td>
       </tr>`; }).join('')}</tbody></table>
       ${list.length ? '' : '<div class="empty">Tady teď nic není.</div>'}
-    </div>
+    </div>`}
   </div>`;
   $('#leadMore').addEventListener('change', e => { S.leadFilter = e.target.value || 'akce'; vLeady(v); });
   const qi = $('#leadQ'); qi.addEventListener('input', () => { S.leadQ = qi.value; const pos = qi.selectionStart; vLeady(v); const n = $('#leadQ'); n.focus(); n.setSelectionRange(pos,pos); });

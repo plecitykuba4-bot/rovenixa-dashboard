@@ -259,14 +259,15 @@ def fronta(actor, vse=False):
     print(f'ZAVOLAT – viděli web, volají oba ({len(zav)}):')
     for c, d, n, sc, du in zav:
         print(f"  #{c['id']:<4} {c['name'][:42]:<42} {c.get('phone') or '-':<14} viděl {n}×, prošel {sc} %, {du} s, naposledy {d}")
-    dnes = [x for x in fu if x[2] <= t]
-    print(f"\nFOLLOW-UP DNES (a po termínu) – {kdo} ({len(dnes)}):")
-    for c, k, due in dnes:
-        print(f"  #{c['id']:<4} {c['name'][:42]:<42} {k}. follow-up  termín {due}  {c.get('email') or '-'}  náhled {c.get('preview') or '-'}")
-    pozdeji = [x for x in fu if x[2] > t]
-    print(f"\nFOLLOW-UP PŘÍŠTĚ – {kdo} ({len(pozdeji)}):")
-    for c, k, due in pozdeji[:15]:
-        print(f"  #{c['id']:<4} {c['name'][:42]:<42} {k}. follow-up  termín {due}")
+    zitra = t + datetime.timedelta(days=1)
+    print(f"\nFOLLOW-UPY – {kdo} (1. = odeslání + 3 dny, 2. = odeslání + 7 dní):")
+    for nadpis, fn, plne in (('PO TERMÍNU – poslat hned', lambda d: d < t, True), ('DNES', lambda d: d == t, True),
+                             ('ZÍTRA', lambda d: d == zitra, False), ('POZDĚJI', lambda d: d > zitra, False)):
+        xs = [x for x in fu if fn(x[2])]
+        print(f"\n  {nadpis} ({len(xs)}):")
+        for c, k, due in xs:
+            extra = f"  {c.get('email') or '-'}  náhled {c.get('preview') or '-'}" if plne else ''
+            print(f"    #{c['id']:<4} {c['name'][:42]:<42} {k}. follow-up  {due.strftime('%d. %m.')}{extra}")
     for st, nadpis in (('novy', 'ODESLAT NÁVRH – web hotový'), ('studeny', 'UDĚLAT WEB – lead bez webu')):
         xs = [c for c in clients if c['stage'] == st and mine(c)]
         print(f"\n{nadpis} – {kdo} ({len(xs)}):")
