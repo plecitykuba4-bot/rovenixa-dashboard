@@ -1,0 +1,869 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#FBF8F2">
+<title>Rovenixa – Studio</title>
+<link rel="icon" href="img/favicon-48.png">
+<link rel="apple-touch-icon" href="img/apple-touch-icon.png">
+<style>
+@font-face{font-family:"Gloock";font-weight:400;font-display:swap;src:url(fonts/gloock-latin-ext.woff2) format("woff2");unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1E00-1E9F,U+20A0-20C4}
+@font-face{font-family:"Gloock";font-weight:400;font-display:swap;src:url(fonts/gloock-latin.woff2) format("woff2");unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F,U+20AC,U+2122,U+2212}
+@font-face{font-family:"Instrument Sans";font-weight:400 700;font-display:swap;src:url(fonts/instrument-sans-latin-ext.woff2) format("woff2");unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1E00-1E9F,U+20A0-20C4}
+@font-face{font-family:"Instrument Sans";font-weight:400 700;font-display:swap;src:url(fonts/instrument-sans-latin.woff2) format("woff2");unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F,U+20AC,U+2122,U+2212}
+
+:root{
+  --paper:#FBF8F2; --paper-2:#F3EDE2; --card:#FFFDF9;
+  --ink:#17140F; --ink-2:#51493D; --ink-3:#6B6154;
+  --line:#E5DCCB; --line-2:#D9CDB6;
+  --gold:#866224; --gold-2:#A9803A; --gold-3:#C9A35E; --gold-bg:#F1E6CD; --gold-bg-2:#F7F1E4;
+  --ok:#3F6B3A; --ok-bg:#E4EDDC; --bad:#A6402C; --bad-bg:#F6E1DA; --wait:#7A5A1E;
+  --radius:18px; --ease:cubic-bezier(.2,.8,.2,1);
+  --shadow:0 1px 0 rgba(23,20,15,.03),0 10px 30px -18px rgba(60,44,15,.28);
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--paper);color:var(--ink);font:15px/1.5 "Instrument Sans",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+h1,h2,h3{font-family:"Gloock",Georgia,serif;font-weight:400;letter-spacing:-.01em;margin:0}
+h1{font-size:clamp(28px,3.4vw,40px);line-height:1.1}
+h2{font-size:22px;line-height:1.2}
+h3{font-family:"Instrument Sans",sans-serif;font-weight:650;font-size:15px}
+a{color:var(--gold)}
+button,input,select,textarea{font:inherit;color:inherit}
+.muted{color:var(--ink-3)}
+.hidden{display:none!important}
+
+/* tlačítka */
+.btn{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line-2);background:var(--card);border-radius:999px;padding:9px 16px;font-weight:600;font-size:14px;cursor:pointer;transition:background .2s,border-color .2s,transform .2s var(--ease);white-space:nowrap}
+.btn:hover{border-color:var(--gold-2);background:var(--gold-bg-2)}
+.btn:active{transform:scale(.97)}
+.btn.gold{background:var(--gold);border-color:var(--gold);color:#FBF8F2}
+.btn.gold:hover{background:#74531C}
+.btn.sm{padding:6px 12px;font-size:13px}
+.btn.ghost{border-color:transparent;background:transparent}
+.btn.ghost:hover{background:var(--paper-2)}
+.btn.danger{color:var(--bad)}
+.btn svg{width:16px;height:16px}
+.icon-btn{border:0;background:transparent;cursor:pointer;border-radius:10px;padding:6px;display:inline-grid;place-items:center;color:var(--ink-2)}
+.icon-btn:hover{background:var(--paper-2)}
+
+/* přihlášení */
+#login{min-height:100svh;display:grid;place-items:center;padding:24px 16px;background:
+  radial-gradient(900px 500px at 85% -10%,#F1E6CD 0,transparent 60%),
+  radial-gradient(700px 400px at -10% 110%,#EFE4CC 0,transparent 60%),var(--paper)}
+.login-card{width:100%;max-width:400px;background:var(--card);border:1px solid var(--line);border-radius:26px;padding:36px 32px 32px;box-shadow:var(--shadow)}
+.login-card .logo{display:flex;align-items:center;gap:12px;margin-bottom:28px}
+.login-card .logo img:first-child{height:38px}
+.login-card .logo img:last-child{height:22px}
+.login-card h1{font-size:34px;margin-bottom:6px}
+.login-card h1 em{font-style:normal;color:var(--gold)}
+.login-card p{margin:0 0 24px;color:var(--ink-3)}
+.who{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
+.who button{border:1px solid var(--line-2);background:var(--paper);border-radius:14px;padding:12px;font-weight:600;cursor:pointer;transition:all .2s}
+.who button[aria-pressed=true]{border-color:var(--gold);background:var(--gold-bg);color:var(--gold)}
+.field{display:grid;gap:6px;margin-bottom:14px}
+.field>span{font-size:13px;font-weight:600;color:var(--ink-2)}
+.inp{width:100%;border:1px solid var(--line-2);background:var(--paper);border-radius:12px;padding:10px 12px;outline:none;transition:border-color .2s,box-shadow .2s}
+.inp:focus{border-color:var(--gold-2);box-shadow:0 0 0 3px rgba(169,128,58,.16)}
+textarea.inp{min-height:84px;resize:vertical}
+.login-card .btn.gold{width:100%;justify-content:center;padding:12px;margin-top:6px}
+.err{color:var(--bad);font-size:14px;min-height:20px;margin-top:10px}
+
+/* rozložení aplikace */
+#app{display:grid;grid-template-columns:236px 1fr;min-height:100svh}
+.side{position:sticky;top:0;height:100svh;border-right:1px solid var(--line);padding:24px 16px;display:flex;flex-direction:column;gap:6px;background:var(--paper)}
+.side .brand{display:flex;align-items:center;gap:10px;padding:0 10px 22px}
+.side .brand img:first-child{height:30px}
+.side .brand img:last-child{height:17px}
+.nav a{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:12px;text-decoration:none;color:var(--ink-2);font-weight:550;transition:background .2s,color .2s}
+.nav a svg{width:19px;height:19px;flex:none}
+.nav a:hover{background:var(--paper-2);color:var(--ink)}
+.nav a.on{background:var(--gold-bg);color:var(--gold)}
+.nav a .cnt{margin-left:auto;font-size:12px;background:var(--card);border:1px solid var(--line);border-radius:999px;padding:0 8px;color:var(--ink-3)}
+.nav a.on .cnt{border-color:var(--gold-3);color:var(--gold)}
+.side .me{margin-top:auto;display:flex;align-items:center;gap:10px;padding:12px;border:1px solid var(--line);border-radius:14px;background:var(--card)}
+.avatar{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:var(--gold-bg);color:var(--gold);font-weight:700;font-size:14px;flex:none}
+.me .nm{font-weight:650;line-height:1.1}
+.me .sub{font-size:12px;color:var(--ink-3)}
+.me .icon-btn{margin-left:auto}
+
+#app>div{min-width:0}
+main{padding:28px clamp(16px,3vw,40px) 80px;min-width:0}
+.top{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:24px}
+.top .sub{color:var(--ink-3);margin-top:6px}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow);min-width:0}
+.card-h{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
+.grid{display:grid;gap:16px}
+.kpis{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
+.kpi .lab{font-size:13px;color:var(--ink-3);font-weight:550}
+.kpi .val{font-family:"Gloock",serif;font-size:30px;line-height:1.15;margin-top:6px;white-space:nowrap}
+.kpi .foot{font-size:13px;color:var(--ink-3);margin-top:4px}
+.kpi.hl{background:linear-gradient(160deg,#F5EBD3,#FFFDF9 70%);border-color:#E3D3AF}
+.up{color:var(--ok);font-weight:600}.down{color:var(--bad);font-weight:600}
+.cols-2{grid-template-columns:1.25fr 1fr}
+.cols-3{grid-template-columns:repeat(3,1fr)}
+.mt{margin-top:16px}
+
+/* seznam "na řadě" */
+.todo{list-style:none;margin:0;padding:0}
+.todo li{display:flex;align-items:center;gap:12px;padding:11px 0;border-top:1px solid var(--line)}
+.todo li:first-child{border-top:0}
+.todo .t{flex:1;min-width:0;cursor:pointer}
+.todo .t b{display:block;font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.todo .t span{font-size:13px;color:var(--ink-3)}
+.date-pill{font-size:12px;font-weight:650;border-radius:999px;padding:3px 10px;background:var(--paper-2);color:var(--ink-2);white-space:nowrap}
+.date-pill.late{background:var(--bad-bg);color:var(--bad)}
+.date-pill.today{background:var(--gold-bg);color:var(--gold)}
+.empty{color:var(--ink-3);font-size:14px;padding:18px 0;text-align:center}
+
+/* fáze */
+.stage{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:650;border-radius:999px;padding:3px 10px;white-space:nowrap;background:var(--paper-2);color:var(--ink-2)}
+.stage::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor;opacity:.75}
+.s-novy{color:#6B6154}.s-odeslano{background:#EFE8DA;color:#5E4A26}
+.s-zajem{background:var(--gold-bg);color:var(--gold)}
+.s-schuzka{background:#F3DFC0;color:#7A4A12}
+.s-pozdeji{background:#E6E8EA;color:#46505A}
+.s-uzavreny{background:var(--ok-bg);color:var(--ok)}
+.s-odmitl{background:#EEEAE4;color:#8A8278}
+
+/* pruhy */
+.bars{display:grid;gap:10px}
+.bar-row{display:grid;grid-template-columns:150px 1fr 44px;align-items:center;gap:12px;font-size:14px}
+.bar-row .track{height:10px;border-radius:99px;background:var(--paper-2);overflow:hidden}
+.bar-row .fill{height:100%;border-radius:99px;background:var(--gold-2);transition:width .6s var(--ease)}
+.bar-row .n{text-align:right;font-weight:650}
+
+/* graf */
+.chart{width:100%;height:auto;display:block}
+.chart text{font:12px "Instrument Sans",sans-serif;fill:var(--ink-3)}
+.legend{display:flex;gap:16px;font-size:13px;color:var(--ink-2)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+
+/* tabulka */
+.tbl-wrap{overflow-x:auto;margin:0 -20px;padding:0 20px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{text-align:left;font-weight:600;color:var(--ink-3);font-size:12.5px;padding:10px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:11px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr{cursor:pointer;transition:background .15s}
+tbody tr:hover{background:var(--gold-bg-2)}
+td.num,th.num{text-align:right;white-space:nowrap}
+td .nm{font-weight:650}
+td .sub{font-size:12.5px;color:var(--ink-3)}
+td a{text-decoration:none}
+td a:hover{text-decoration:underline}
+
+.toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+.toolbar .inp{width:auto;min-width:0}
+.toolbar .search{flex:1 1 220px}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{border:1px solid var(--line-2);background:var(--card);border-radius:999px;padding:6px 13px;font-size:13px;font-weight:600;cursor:pointer;color:var(--ink-2)}
+.chip[aria-pressed=true]{background:var(--gold-bg);border-color:var(--gold-3);color:var(--gold)}
+.chip .c{opacity:.7;margin-left:4px}
+
+/* kanban */
+.board{display:grid;grid-template-columns:repeat(4,minmax(240px,1fr));gap:14px;overflow-x:auto;padding-bottom:8px}
+.board.five{grid-template-columns:repeat(5,minmax(230px,1fr))}
+.col{background:var(--paper-2);border-radius:var(--radius);padding:12px;min-height:260px;transition:background .2s,box-shadow .2s}
+.col.over{background:var(--gold-bg);box-shadow:inset 0 0 0 2px var(--gold-3)}
+.col-h{display:flex;align-items:center;justify-content:space-between;padding:4px 6px 12px}
+.col-h h3{display:flex;align-items:center;gap:8px}
+.col-h .sum{font-size:12.5px;color:var(--ink-3)}
+.kcard{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-bottom:10px;cursor:grab;box-shadow:0 1px 0 rgba(0,0,0,.02);transition:transform .2s var(--ease),box-shadow .2s}
+.kcard:hover{transform:translateY(-1px);box-shadow:var(--shadow)}
+.kcard.drag{opacity:.45}
+.kcard b{display:block;font-weight:650;line-height:1.3}
+.kcard .meta{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px;font-size:12.5px;color:var(--ink-3)}
+.kcard .nx{margin-top:8px;font-size:13px;color:var(--ink-2)}
+.add-col{width:100%;border:1px dashed var(--line-2);background:transparent;border-radius:12px;padding:9px;color:var(--ink-3);font-weight:600;cursor:pointer}
+.add-col:hover{border-color:var(--gold-2);color:var(--gold)}
+
+/* aktivita – matice */
+.matrix td,.matrix th{text-align:center}
+.matrix td:first-child,.matrix th:first-child{text-align:left}
+.matrix tbody tr{cursor:default}
+.matrix .z{color:var(--line-2)}
+.matrix tfoot td{font-weight:700;border-bottom:0}
+.weeknav{display:flex;align-items:center;gap:6px}
+.feed{list-style:none;margin:0;padding:0}
+.feed li{display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-top:1px solid var(--line);font-size:14px}
+.feed li:first-child{border-top:0}
+.feed .dot{width:30px;height:30px;border-radius:50%;background:var(--gold-bg);color:var(--gold);display:grid;place-items:center;font-weight:700;font-size:12px;flex:none}
+.feed .dot.c{background:#E9E4F2;color:#4B3F72}
+.feed .x{margin-left:auto}
+
+/* modal */
+dialog{border:0;padding:0;border-radius:24px;background:var(--card);color:var(--ink);width:min(720px,calc(100vw - 24px));max-height:calc(100svh - 24px);box-shadow:0 30px 80px -20px rgba(40,28,8,.45)}
+dialog::backdrop{background:rgba(35,28,16,.38);backdrop-filter:blur(2px)}
+.m-h{display:flex;align-items:center;justify-content:space-between;padding:22px 24px 6px}
+.m-b{padding:12px 24px 8px;overflow:auto}
+.m-f{display:flex;gap:8px;justify-content:flex-end;padding:14px 24px 22px;flex-wrap:wrap}
+.m-f .left{margin-right:auto}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}
+.form-grid .full{grid-column:1/-1}
+.links{display:flex;gap:8px;flex-wrap:wrap;margin:2px 0 14px}
+.links a{font-size:13px;font-weight:600;text-decoration:none;border:1px solid var(--line);border-radius:999px;padding:5px 12px;background:var(--paper)}
+.links a:hover{border-color:var(--gold-3)}
+.sub-list{border-top:1px solid var(--line);margin-top:8px;padding-top:12px}
+.sub-list h3{margin-bottom:8px}
+.sub-list .row{display:flex;justify-content:space-between;gap:10px;font-size:14px;padding:5px 0}
+.stage-pick{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+.stage-pick label{cursor:pointer}
+.stage-pick input{position:absolute;opacity:0;pointer-events:none}
+.stage-pick input:checked+.stage{box-shadow:0 0 0 2px currentColor}
+.stage-pick input:focus-visible+.stage{outline:2px solid var(--gold-2);outline-offset:2px}
+
+.dup{border:1px solid #E8C9A0;background:#FBF1E2;border-radius:14px;padding:12px 14px;margin-bottom:14px;font-size:14px}
+.dup .row{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:8px}
+.own{width:24px;height:24px;font-size:11px;margin-left:auto}
+.toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,20px);background:var(--card);border:1px solid var(--line-2);color:var(--ink);padding:10px 18px;border-radius:999px;font-weight:600;font-size:14px;box-shadow:var(--shadow);opacity:0;transition:all .3s var(--ease);z-index:50;pointer-events:none}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+.toast.bad{color:var(--bad)}
+.sync{font-size:12px;color:var(--ink-3)}
+
+/* mobil */
+.mtop{display:none}
+@media (max-width:1100px){.cols-2,.cols-3{grid-template-columns:1fr}}
+@media (max-width:860px){
+  #app{grid-template-columns:1fr}
+  .side{display:none}
+  .mtop{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--line);position:sticky;top:0;background:rgba(251,248,242,.92);backdrop-filter:blur(10px);z-index:20}
+  .mtop .brand{display:flex;align-items:center;gap:8px}
+  .mtop .brand img:first-child{height:26px}.mtop .brand img:last-child{height:15px}
+  main{padding:20px 16px 110px}
+  .bnav{position:fixed;left:50%;bottom:calc(12px + env(safe-area-inset-bottom));transform:translateX(-50%);display:flex;gap:2px;background:rgba(255,253,249,.94);backdrop-filter:blur(12px);border:1px solid var(--line-2);border-radius:999px;padding:5px;box-shadow:var(--shadow);z-index:30}
+  .bnav a{display:grid;place-items:center;gap:1px;padding:7px 12px;border-radius:999px;color:var(--ink-3);text-decoration:none;font-size:10.5px;font-weight:600}
+  .bnav a svg{width:20px;height:20px}
+  .bnav a.on{background:var(--gold-bg);color:var(--gold)}
+  .form-grid{grid-template-columns:1fr}
+  .kpis{grid-template-columns:1fr 1fr;gap:10px}
+  .kpi{padding:14px}
+  .kpi .val{font-size:21px}
+  .kpi .foot{font-size:12px}
+  .kpi.hl{grid-column:1/-1}
+  .kpi.hl .val{font-size:28px}
+  .bar-row{grid-template-columns:110px 1fr 36px}
+  .board,.board.five{grid-template-columns:repeat(5,82vw);scroll-snap-type:x mandatory}
+  .col{scroll-snap-align:start}
+  .hide-m{display:none}
+  .m-h,.m-b,.m-f{padding-left:18px;padding-right:18px}
+}
+@media (min-width:861px){.bnav{display:none}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<!-- PŘIHLÁŠENÍ -->
+<section id="login" class="hidden">
+  <form class="login-card" id="loginForm" autocomplete="on">
+    <div class="logo"><img src="img/logo-znak.png" alt=""><img src="img/logo-napis.png" alt="Rovenixa"></div>
+    <h1>Vítejte <em>zpět.</em></h1>
+    <p>Interní přehled studia – klienti, peníze a outreach.</p>
+    <div class="who" role="group" aria-label="Kdo se přihlašuje">
+      <button type="button" data-who="Jakub" aria-pressed="true">Jakub</button>
+      <button type="button" data-who="Jan" aria-pressed="false">Jan</button>
+    </div>
+    <input type="hidden" name="name" value="Jakub" autocomplete="username">
+    <label class="field"><span>Heslo</span><input class="inp" type="password" name="password" autocomplete="current-password" required></label>
+    <button class="btn gold" type="submit">Přihlásit se</button>
+    <div class="err" id="loginErr" role="alert"></div>
+  </form>
+</section>
+
+<!-- APLIKACE -->
+<div id="app" class="hidden">
+  <aside class="side">
+    <div class="brand"><img src="img/logo-znak.png" alt=""><img src="img/logo-napis.png" alt="Rovenixa"></div>
+    <nav class="nav" id="nav"></nav>
+    <div class="me">
+      <div class="avatar" id="meAv"></div>
+      <div><div class="nm" id="meName"></div><div class="sub sync" id="syncInfo">načítám…</div></div>
+      <button class="icon-btn" id="logout" title="Odhlásit se" aria-label="Odhlásit se"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 17l5-5-5-5M15 12H3"/></svg></button>
+    </div>
+  </aside>
+  <div>
+    <header class="mtop">
+      <div class="brand"><img src="img/logo-znak.png" alt=""><img src="img/logo-napis.png" alt="Rovenixa"></div>
+      <div style="display:flex;align-items:center;gap:8px"><div class="avatar" id="meAv2"></div><button class="icon-btn" id="logout2" aria-label="Odhlásit se"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 17l5-5-5-5M15 12H3"/></svg></button></div>
+    </header>
+    <main id="view"></main>
+  </div>
+  <nav class="bnav" id="bnav"></nav>
+</div>
+
+<dialog id="dlg"></dialog>
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+const API = (location.hostname === 'localhost' || location.hostname === '127.0.0.1') && new URLSearchParams(location.search).get('api')
+  ? new URLSearchParams(location.search).get('api') : 'https://rovenixa-crm.rovenixa.workers.dev';
+
+const STAGES = [
+  {k:'novy', t:'Web hotový'},
+  {k:'odeslano', t:'Návrh odeslán'},
+  {k:'zajem', t:'Projevil zájem'},
+  {k:'schuzka', t:'Domluvená schůzka'},
+  {k:'pozdeji', t:'Napsat později'},
+  {k:'uzavreny', t:'Uzavřený klient'},
+  {k:'odmitl', t:'Odmítl / nevyšlo'},
+];
+const ST = Object.fromEntries(STAGES.map(s => [s.k, s.t]));
+const ACTIVE = ['zajem','schuzka','pozdeji'];
+const KINDS = {web:'Webů vytvořeno', odeslano:'Návrhů odesláno', followup:'Follow-upů', odpoved:'Odpovědí', hovor:'Telefonátů', schuzka:'Schůzek', uzavreno:'Uzavřeno'};
+const KIND_SHORT = {web:'Weby', odeslano:'Odesláno', followup:'Follow-up', odpoved:'Odpovědi', hovor:'Hovory', schuzka:'Schůzky', uzavreno:'Uzavřeno'};
+const BASE_ACTORS = ['Claude 1','Claude 2','Jakub','Jan'];
+const STAGE_KIND = {odeslano:'odeslano', zajem:'odpoved', schuzka:'schuzka', uzavreny:'uzavreno'};
+
+const I = {
+  home:'<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/>',
+  users:'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5M16 4.8a3.5 3.5 0 0 1 0 6.4M18 14.8c1.8.7 3 2.4 3.5 5.2"/>',
+  send:'<path d="M21 3L10 14M21 3l-7 18-4-7-7-4z"/>',
+  coin:'<rect x="3" y="6" width="18" height="13" rx="2.5"/><path d="M3 10h18M7 15h3"/>',
+  pulse:'<path d="M3 12h4l3-7 4 14 3-7h4"/>',
+  plus:'<path d="M12 5v14M5 12h14"/>',
+  check:'<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  x:'<path d="M6 6l12 12M18 6L6 18"/>',
+  left:'<path d="M15 5l-7 7 7 7"/>', right:'<path d="M9 5l7 7-7 7"/>',
+};
+const ico = (n, s=18) => `<svg viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${I[n]}</svg>`;
+
+const VIEWS = [
+  {k:'prehled', t:'Přehled', i:'home'},
+  {k:'klienti', t:'Klienti', i:'users'},
+  {k:'leady', t:'Leady', i:'send'},
+  {k:'penize', t:'Peníze', i:'coin'},
+  {k:'aktivita', t:'Aktivita', i:'pulse'},
+];
+
+const S = { user:null, token:null, clients:[], money:[], activity:[], view:'prehled',
+  leadFilter:'all', leadQ:'', leadBy:'', showLost:false, week:0, moneyFilter:'all', owner:'', lastSync:null };
+const PEOPLE = ['Jakub','Jan'];
+
+/* ---------- pomocné ---------- */
+const $ = (s, r=document) => r.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const kc = n => (Math.round(n||0)).toLocaleString('cs-CZ').replace(/ /g,' ') + ' Kč';
+const pad = n => String(n).padStart(2,'0');
+const iso = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const today = () => iso(new Date());
+const parse = s => { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); };
+const addDays = (s, n) => { const d = parse(s); d.setDate(d.getDate()+n); return iso(d); };
+const monday = s => { const d = parse(s); const w = (d.getDay()+6)%7; d.setDate(d.getDate()-w); return iso(d); };
+const fd = s => { if(!s) return ''; const d = parse(s.slice(0,10)); const y = d.getFullYear() !== new Date().getFullYear() ? ' ' + d.getFullYear() : ''; return `${d.getDate()}. ${d.getMonth()+1}.${y}`; };
+const host = u => String(u||'').replace(/^https?:\/\//,'').replace(/\/$/,'');
+const href = u => !u ? '' : (/^https?:/.test(u) ? u : 'https://' + u);
+const initials = s => String(s||'?').split(/\s+/).map(w=>w[0]).join('').slice(0,2).toUpperCase();
+const MONTHS = ['led','úno','bře','dub','kvě','čvn','čvc','srp','zář','říj','lis','pro'];
+const vocative = {Jakub:'Jakube', Jan:'Honzo'};
+const store = { get(k){ try { return localStorage.getItem(k); } catch { return null; } },
+  set(k,v){ try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k,v); } catch {} } };
+
+function toast(msg, bad=false){
+  const t = $('#toast'); t.textContent = msg; t.classList.toggle('bad', bad); t.classList.add('on');
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('on'), 2600);
+}
+
+async function api(method, path, body){
+  const r = await fetch(API + path, { method, headers: { 'Content-Type':'application/json', ...(S.token ? {Authorization:'Bearer '+S.token} : {}) },
+    body: body !== undefined ? JSON.stringify(body) : undefined });
+  const data = await r.json().catch(() => ({}));
+  if (r.status === 401 && path !== '/api/login') { logout(); throw new Error('Přihlášení vypršelo'); }
+  if (!r.ok) throw new Error(data.error || 'Chyba ' + r.status);
+  return data;
+}
+
+/* ---------- přihlášení ---------- */
+function showLogin(){
+  $('#app').classList.add('hidden'); $('#login').classList.remove('hidden');
+  setTimeout(() => $('#loginForm [name=password]').focus(), 50);
+}
+document.querySelectorAll('.who button').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('.who button').forEach(x => x.setAttribute('aria-pressed', x === b));
+  $('#loginForm [name=name]').value = b.dataset.who;
+  $('#loginForm [name=password]').focus();
+}));
+$('#loginForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const f = new FormData(e.target), btn = e.target.querySelector('.btn');
+  btn.disabled = true; $('#loginErr').textContent = '';
+  try {
+    const r = await api('POST', '/api/login', { name: f.get('name'), password: f.get('password') });
+    S.user = r.user; S.token = r.token; store.set('rx_token', r.token); store.set('rx_user', r.user);
+    e.target.reset(); start();
+  } catch (err) { $('#loginErr').textContent = err.message; }
+  btn.disabled = false;
+});
+function logout(){ S.token = null; store.set('rx_token', null); showLogin(); }
+$('#logout').onclick = logout; $('#logout2').onclick = logout;
+
+/* ---------- data ---------- */
+async function load(silent){
+  try {
+    const d = await api('GET', '/api/all');
+    S.user = d.user; S.clients = d.clients; S.money = d.money; S.activity = d.activity; S.lastSync = new Date();
+    if (!document.querySelector('dialog[open]')) render();
+    else renderChrome();
+  } catch (err) { if (!silent) toast(err.message, true); }
+}
+function upsert(list, row){ const i = list.findIndex(x => x.id === row.id); if (i >= 0) list[i] = row; else list.unshift(row); }
+const client = id => S.clients.find(c => c.id === +id);
+function actors(){
+  const set = new Set(BASE_ACTORS);
+  S.activity.forEach(a => set.add(a.actor)); S.clients.forEach(c => c.made_by && set.add(c.made_by));
+  set.delete('Claude'); return [...set];
+}
+
+async function logAct(kind, count=1, extra={}){
+  try { const r = await api('POST', '/api/activity', { kind, count, actor: S.user, date: today(), ...extra }); S.activity.unshift(r); }
+  catch (err) { toast(err.message, true); }
+}
+
+async function setStage(c, stage){
+  if (c.stage === stage) return;
+  const patch = { stage };
+  if (stage === 'odeslano' && !c.sent_date) patch.sent_date = today();
+  try {
+    const r = await api('PATCH', '/api/clients/' + c.id, patch); upsert(S.clients, r);
+    if (STAGE_KIND[stage]) await logAct(STAGE_KIND[stage], 1, { client_id: c.id, note: c.name });
+    toast(`${c.name} → ${ST[stage]}`);
+    render();
+    if (stage === 'uzavreny' && !S.money.some(m => m.client_id === c.id)) {
+      openMoney({ client_id: c.id, amount: c.price || 6999, status: 'ceka', label: 'Web – ' + c.name, kind: 'prijem', date: today() }, true);
+    }
+  } catch (err) { toast(err.message, true); }
+}
+
+/* ---------- výpočty ---------- */
+function sumAct(from, to, filter = () => true){
+  const out = {}; Object.keys(KINDS).forEach(k => out[k] = 0);
+  S.activity.forEach(a => { if (a.date >= from && a.date <= to && filter(a)) out[a.kind] = (out[a.kind]||0) + (a.count||0); });
+  return out;
+}
+const income = (from='0000', to='9999') => S.money.filter(m => m.kind==='prijem' && m.status==='zaplaceno' && m.date>=from && m.date<=to).reduce((s,m)=>s+m.amount,0);
+const costs = (from='0000', to='9999') => S.money.filter(m => m.kind==='vydaj' && m.status==='zaplaceno' && m.date>=from && m.date<=to).reduce((s,m)=>s+m.amount,0);
+const pending = () => S.money.filter(m => m.kind==='prijem' && m.status==='ceka');
+function monthRange(offset=0){ const d = new Date(); d.setDate(1); d.setMonth(d.getMonth()+offset); const s = iso(d); d.setMonth(d.getMonth()+1); d.setDate(0); return [s, iso(d)]; }
+function delta(a, b, unit=''){ if (!b && !a) return '<span class="muted">beze změny</span>'; const d = a - b; if (!d) return '<span class="muted">stejně jako minule</span>';
+  return `<span class="${d>0?'up':'down'}">${d>0?'+':''}${unit==='kc'?kc(d):d}</span> <span class="muted">proti minulému</span>`; }
+
+/* ---------- vykreslení ---------- */
+function renderChrome(){
+  const counts = { klienti: S.clients.filter(c => ACTIVE.includes(c.stage)).length, leady: S.clients.filter(c => ['novy','odeslano'].includes(c.stage)).length };
+  const navHtml = VIEWS.map(v => `<a href="#${v.k}" class="${S.view===v.k?'on':''}">${ico(v.i,19)}<span>${v.t}</span>${counts[v.k]!=null?`<span class="cnt">${counts[v.k]}</span>`:''}</a>`).join('');
+  $('#nav').innerHTML = navHtml;
+  $('#bnav').innerHTML = VIEWS.map(v => `<a href="#${v.k}" class="${S.view===v.k?'on':''}" aria-label="${v.t}">${ico(v.i,20)}<span>${v.t}</span></a>`).join('');
+  $('#meName').textContent = S.user; $('#meAv').textContent = initials(S.user); $('#meAv2').textContent = initials(S.user);
+  $('#syncInfo').textContent = S.lastSync ? 'aktualizováno ' + S.lastSync.toLocaleTimeString('cs-CZ',{hour:'2-digit',minute:'2-digit'}) : 'načítám…';
+}
+
+function render(){
+  renderChrome();
+  const v = $('#view');
+  ({prehled:vPrehled, klienti:vKlienti, leady:vLeady, penize:vPenize, aktivita:vAktivita}[S.view] || vPrehled)(v);
+}
+
+function pageTop(title, sub, actions=''){
+  return `<div class="top"><div><h1>${title}</h1>${sub?`<div class="sub">${sub}</div>`:''}</div><div class="actions">${actions}</div></div>`;
+}
+const BTN_CLIENT = `<button class="btn gold" data-act="new-client">${ico('plus',16)}Klient</button>`;
+const BTN_MONEY = `<button class="btn" data-act="new-money">${ico('plus',16)}Platba</button>`;
+const BTN_LOG = `<button class="btn" data-act="new-log">${ico('plus',16)}Záznam práce</button>`;
+
+function todoItems(){
+  const t = today(), lim = addDays(t, 14);
+  return S.clients.filter(c => c.next_date && c.stage !== 'odmitl' && c.next_date <= lim).sort((a,b) => a.next_date.localeCompare(b.next_date));
+}
+function datePill(s){
+  const t = today(); const cls = s < t ? 'late' : s === t ? 'today' : '';
+  const lab = s === t ? 'dnes' : s === addDays(t,1) ? 'zítra' : s < t ? fd(s) + ' · pozdě' : fd(s);
+  return `<span class="date-pill ${cls}">${lab}</span>`;
+}
+
+function vPrehled(v){
+  const t = today(), h = new Date().getHours();
+  const hello = (h < 10 ? 'Dobré ráno' : h < 18 ? 'Ahoj' : 'Dobrý večer') + ', ' + (vocative[S.user] || S.user) + '.';
+  const [m0s, m0e] = monthRange(0), [m1s, m1e] = monthRange(-1);
+  const y = new Date().getFullYear() + '-01-01';
+  const pend = pending(); const pendSum = pend.reduce((s,m)=>s+m.amount,0);
+  const active = S.clients.filter(c => ACTIVE.includes(c.stage));
+  const closed = S.clients.filter(c => c.stage === 'uzavreny');
+  const wk = monday(t), wkPrev = addDays(wk, -7);
+  const cur = sumAct(wk, addDays(wk,6)), prev = sumAct(wkPrev, addDays(wkPrev,6));
+  const todo = todoItems();
+  const sent = S.clients.filter(c => c.sent_date).length;
+  const replied = S.clients.filter(c => c.sent_date && ['zajem','schuzka','pozdeji','uzavreny'].includes(c.stage)).length;
+
+  v.innerHTML = pageTop(hello, new Date().toLocaleDateString('cs-CZ',{weekday:'long', day:'numeric', month:'long'}), BTN_CLIENT + BTN_MONEY + BTN_LOG) + `
+  <div class="grid kpis">
+    <div class="card kpi hl"><div class="lab">Obrat letos</div><div class="val">${kc(income(y))}</div><div class="foot">zisk ${kc(income(y) - costs(y))} po výdajích</div></div>
+    <div class="card kpi"><div class="lab">Tento měsíc</div><div class="val">${kc(income(m0s,m0e))}</div><div class="foot">${delta(income(m0s,m0e), income(m1s,m1e), 'kc')}</div></div>
+    <div class="card kpi"><div class="lab">Čeká na zaplacení</div><div class="val">${kc(pendSum)}</div><div class="foot">${pend.length ? pend.length + (pend.length===1?' platba':' plateb') : 'nikdo nedluží'}</div></div>
+    <div class="card kpi"><div class="lab">Rozjednaní klienti</div><div class="val">${active.length}</div><div class="foot">${closed.length} uzavřených celkem</div></div>
+    <div class="card kpi"><div class="lab">Kladná odpověď</div><div class="val">${sent ? Math.round(replied/sent*100) : 0} %</div><div class="foot">${replied} kladných z ${sent} odeslaných</div></div>
+  </div>
+
+  <div class="grid cols-2 mt">
+    <div class="card">
+      <div class="card-h"><h2>Na řadě</h2><span class="muted" style="font-size:13px">komu napsat a zavolat · 14 dní</span></div>
+      ${todo.length ? `<ul class="todo">${todo.map(c => `<li>
+        ${datePill(c.next_date)}
+        <div class="t" data-open="${c.id}"><b>${esc(c.name)}</b><span>${esc(c.next_action || ST[c.stage])}${c.phone ? ' · ' + esc(c.phone) : ''}${c.owner ? ' · ' + esc(c.owner) : ''}</span></div>
+        <button class="btn sm" data-done="${c.id}" title="Vyřízeno">${ico('check',15)}<span class="hide-m">Vyřízeno</span></button>
+      </li>`).join('')}</ul>` : `<div class="empty">Nic naplánovaného. Datum „Ozvat se“ nastavíte v kartě klienta.</div>`}
+      ${pend.length ? `<div class="sub-list"><h3>Kdo má zaplatit</h3>${pend.map(m => `<div class="row" style="cursor:pointer" data-money="${m.id}"><span>${esc(m.label || client(m.client_id)?.name || 'Platba')}<span class="muted"> · od ${fd(m.date)}</span></span><b>${kc(m.amount)}</b></div>`).join('')}</div>` : ''}
+    </div>
+    <div class="card">
+      <div class="card-h"><h2>Tento týden</h2><span class="muted" style="font-size:13px">${fd(wk)} – ${fd(addDays(wk,6))}</span></div>
+      <div class="bars">${['web','odeslano','followup','odpoved','schuzka','uzavreno'].map(k => {
+        const mx = Math.max(1, ...['web','odeslano','followup','odpoved','schuzka','uzavreno'].map(x => Math.max(cur[x], prev[x])));
+        return `<div class="bar-row"><span>${KINDS[k]}</span><div class="track"><div class="fill" style="width:${cur[k]/mx*100}%"></div></div><span class="n">${cur[k]}</span></div>`; }).join('')}</div>
+      <div class="muted" style="font-size:13px;margin-top:14px">Minulý týden: ${prev.web} webů, ${prev.odeslano} odeslaných, ${prev.odpoved} odpovědí.</div>
+    </div>
+  </div>
+
+  <div class="grid cols-2 mt">
+    <div class="card">
+      <div class="card-h"><h2>Weby a odeslané návrhy</h2><div class="legend"><span><i style="background:var(--gold-3)"></i>vytvořeno</span><span><i style="background:var(--gold)"></i>odesláno</span></div></div>
+      ${weeksChart(8)}
+    </div>
+    <div class="card">
+      <div class="card-h"><h2>Kde jsou klienti</h2></div>
+      <div class="bars">${(() => { const cnt = STAGES.map(s => S.clients.filter(c => c.stage === s.k).length); const mx = Math.max(1,...cnt);
+        return STAGES.map((s,i) => `<div class="bar-row"><span><span class="stage s-${s.k}">${s.t}</span></span><div class="track"><div class="fill" style="width:${cnt[i]/mx*100}%;background:${s.k==='uzavreny'?'var(--ok)':s.k==='odmitl'?'var(--line-2)':'var(--gold-2)'}"></div></div><span class="n">${cnt[i]}</span></div>`).join(''); })()}</div>
+    </div>
+  </div>
+
+  <div class="card mt">
+    <div class="card-h"><h2>Příjmy po měsících</h2><span class="muted" style="font-size:13px">zaplacené příjmy · posledních 6 měsíců</span></div>
+    ${monthsChart(6)}
+  </div>`;
+}
+
+function weeksChart(n){
+  const wk = monday(today()); const W = 640, H = 210, pl = 30, pb = 28, pt = 10;
+  const data = []; for (let i = n-1; i >= 0; i--) { const s = addDays(wk, -7*i); const a = sumAct(s, addDays(s,6)); data.push({ s, web:a.web, od:a.odeslano }); }
+  const mx = Math.max(4, ...data.map(d => Math.max(d.web, d.od))); const step = Math.ceil(mx/4);
+  const top = step*4, cw = (W-pl)/n, bw = Math.min(16, cw/3.2), y = v => pt + (H-pt-pb)*(1-v/top);
+  let g = ''; for (let i = 0; i <= 4; i++){ const v = step*i; g += `<line x1="${pl}" x2="${W}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)" stroke-dasharray="${i?'3 4':''}"/><text x="${pl-8}" y="${y(v)+4}" text-anchor="end">${v}</text>`; }
+  data.forEach((d,i) => { const cx = pl + cw*i + cw/2;
+    g += `<rect x="${cx-bw-2}" y="${y(d.web)}" width="${bw}" height="${y(0)-y(d.web)}" rx="4" fill="var(--gold-3)"><title>${fd(d.s)}: ${d.web} webů</title></rect>`;
+    g += `<rect x="${cx+2}" y="${y(d.od)}" width="${bw}" height="${y(0)-y(d.od)}" rx="4" fill="var(--gold)"><title>${fd(d.s)}: ${d.od} odesláno</title></rect>`;
+    g += `<text x="${cx}" y="${H-8}" text-anchor="middle">${fd(d.s)}</text>`; });
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Týdenní počty webů a odeslaných návrhů">${g}</svg>`;
+}
+function monthsChart(n){
+  const W = 900, H = 200, pl = 70, pb = 28, pt = 10; const data = [];
+  for (let i = n-1; i >= 0; i--) { const [s,e] = monthRange(-i); data.push({ s, inc: income(s,e), cost: costs(s,e) }); }
+  const mx = Math.max(10000, ...data.map(d => Math.max(d.inc, d.cost))); const step = Math.ceil(mx/4/1000)*1000; const top = step*4;
+  const cw = (W-pl)/n, bw = Math.min(34, cw/3), y = v => pt + (H-pt-pb)*(1-v/top);
+  let g = ''; for (let i = 0; i <= 4; i++){ const v = step*i; g += `<line x1="${pl}" x2="${W}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)" stroke-dasharray="${i?'3 4':''}"/><text x="${pl-8}" y="${y(v)+4}" text-anchor="end">${(v/1000)|0} tis.</text>`; }
+  data.forEach((d,i) => { const cx = pl + cw*i + cw/2, m = parse(d.s).getMonth();
+    g += `<rect x="${cx-bw-2}" y="${y(d.inc)}" width="${bw}" height="${y(0)-y(d.inc)}" rx="5" fill="var(--gold-2)"><title>${MONTHS[m]}: příjmy ${kc(d.inc)}</title></rect>`;
+    g += `<rect x="${cx+2}" y="${y(d.cost)}" width="${bw}" height="${y(0)-y(d.cost)}" rx="5" fill="var(--line-2)"><title>${MONTHS[m]}: výdaje ${kc(d.cost)}</title></rect>`;
+    if (d.inc) g += `<text x="${cx-bw/2-2}" y="${y(d.inc)-6}" text-anchor="middle" style="fill:var(--ink-2);font-weight:600">${Math.round(d.inc/1000)}k</text>`;
+    g += `<text x="${cx}" y="${H-8}" text-anchor="middle">${MONTHS[m]}</text>`; });
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Příjmy a výdaje po měsících">${g}</svg><div class="legend" style="margin-top:8px"><span><i style="background:var(--gold-2)"></i>příjmy</span><span><i style="background:var(--line-2)"></i>výdaje</span></div>`;
+}
+
+function kcard(c){
+  const paid = S.money.filter(m => m.client_id === c.id && m.kind === 'prijem');
+  const paidSum = paid.filter(m => m.status === 'zaplaceno').reduce((s,m)=>s+m.amount,0);
+  const pendSum = paid.filter(m => m.status === 'ceka').reduce((s,m)=>s+m.amount,0);
+  return `<div class="kcard" draggable="true" data-open="${c.id}" data-drag="${c.id}">
+    <div style="display:flex;gap:8px;align-items:flex-start"><b>${esc(c.name)}</b>${c.owner ? `<span class="avatar own" title="Řeší ${esc(c.owner)}">${initials(c.owner)}</span>` : ''}</div>
+    <div class="meta">${c.city ? esc(c.city) : ''}${c.price ? `<span>· ${kc(c.price)}</span>` : ''}
+      ${c.stage==='uzavreny' ? (pendSum ? `<span class="date-pill late">dluží ${kc(pendSum)}</span>` : paidSum ? `<span class="date-pill" style="background:var(--ok-bg);color:var(--ok)">zaplaceno</span>` : '') : ''}
+    </div>
+    ${c.next_date || c.next_action ? `<div class="nx">${c.next_date ? datePill(c.next_date) + ' ' : ''}${esc(c.next_action)}</div>` : ''}
+  </div>`;
+}
+function vKlienti(v){
+  const cols = ['zajem','schuzka','pozdeji','uzavreny'].concat(S.showLost ? ['odmitl'] : []);
+  const ownF = c => !S.owner || (S.owner === '-' ? !c.owner : c.owner === S.owner);
+  v.innerHTML = pageTop('Klienti', 'Přetáhněte kartu do jiného sloupce, když se klient posune.',
+    `<div class="chips">${[['','Všichni'],[S.user,'Moje'],...PEOPLE.filter(p=>p!==S.user).map(p=>[p,p]),['-','Nikdo neřeší']].map(([k,t]) => `<button class="chip" data-own="${k}" aria-pressed="${S.owner===k}">${t}</button>`).join('')}</div>` +
+    `<button class="chip" aria-pressed="${S.showLost}" data-act="toggle-lost">Odmítnutí (${S.clients.filter(c=>c.stage==='odmitl').length})</button>` + BTN_CLIENT) +
+    `<div class="board ${cols.length===5?'five':''}">${cols.map(k => { const list = S.clients.filter(c => c.stage === k && ownF(c))
+      .sort((a,b) => (a.next_date||'9').localeCompare(b.next_date||'9') || b.updated_at.localeCompare(a.updated_at));
+      const sum = list.reduce((s,c)=>s+(c.price||0),0);
+      return `<section class="col" data-drop="${k}"><div class="col-h"><h3><span class="stage s-${k}">${ST[k]}</span></h3><span class="sum">${list.length}${sum && k!=='odmitl' ? ' · ' + kc(sum) : ''}</span></div>
+        ${list.map(kcard).join('') || ''}
+        <button class="add-col" data-act="new-client" data-stage="${k}">+ přidat</button></section>`; }).join('')}</div>`;
+  bindDnD(v);
+}
+function bindDnD(root){
+  root.querySelectorAll('[data-drag]').forEach(el => {
+    el.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', el.dataset.drag); el.classList.add('drag'); });
+    el.addEventListener('dragend', () => el.classList.remove('drag'));
+  });
+  root.querySelectorAll('[data-drop]').forEach(col => {
+    col.addEventListener('dragover', e => { e.preventDefault(); col.classList.add('over'); });
+    col.addEventListener('dragleave', e => { if (!col.contains(e.relatedTarget)) col.classList.remove('over'); });
+    col.addEventListener('drop', e => { e.preventDefault(); col.classList.remove('over'); const c = client(e.dataTransfer.getData('text/plain')); if (c) setStage(c, col.dataset.drop); });
+  });
+}
+
+function vLeady(v){
+  const all = S.clients.filter(c => ['novy','odeslano'].includes(c.stage));
+  const q = S.leadQ.trim().toLowerCase();
+  let list = S.clients.filter(c => S.leadFilter === 'all' ? ['novy','odeslano'].includes(c.stage) : S.leadFilter === 'vse' ? true : c.stage === S.leadFilter);
+  if (S.leadBy) list = list.filter(c => c.made_by === S.leadBy);
+  if (q) list = list.filter(c => [c.name,c.city,c.email,c.phone,c.person,c.preview,c.note].join(' ').toLowerCase().includes(q));
+  list.sort((a,b) => (b.sent_date||'0').localeCompare(a.sent_date||'0') || b.created_at.localeCompare(a.created_at));
+  const makers = [...new Set(S.clients.map(c => c.made_by).filter(Boolean))];
+  const chips = [['all','Otevřené leady', all.length], ['novy','Web hotový', S.clients.filter(c=>c.stage==='novy').length], ['odeslano','Odesláno', S.clients.filter(c=>c.stage==='odeslano').length], ['vse','Všichni', S.clients.length]];
+  v.innerHTML = pageTop('Leady', 'Firmy, kterým jsme udělali náhled webu. Když někdo odpoví, posuňte ho dál.', BTN_CLIENT) + `
+  <div class="card">
+    <div class="toolbar">
+      <div class="chips">${chips.map(([k,t,n]) => `<button class="chip" data-lf="${k}" aria-pressed="${S.leadFilter===k}">${t}<span class="c">${n}</span></button>`).join('')}</div>
+      <input class="inp search" type="search" placeholder="Hledat firmu, město, e-mail…" value="${esc(S.leadQ)}" id="leadQ">
+      <select class="inp" id="leadBy"><option value="">Kdo dělal web: všichni</option>${makers.map(m => `<option ${S.leadBy===m?'selected':''}>${esc(m)}</option>`).join('')}</select>
+    </div>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Firma</th><th class="hide-m">Kontakt</th><th class="hide-m">Náhled</th><th>Stav</th><th class="hide-m">Odesláno</th><th class="hide-m">Web dělal</th><th class="hide-m"></th></tr></thead>
+      <tbody>${list.slice(0,400).map(c => `<tr data-open="${c.id}">
+        <td><div class="nm">${esc(c.name)}</div><div class="sub">${esc(c.city)}</div></td>
+        <td class="hide-m"><div>${esc(c.email)}</div><div class="sub">${esc(c.phone)}</div></td>
+        <td class="hide-m">${c.preview ? `<a href="${esc(href(c.preview))}" target="_blank" rel="noopener" data-stop>${esc(host(c.preview))}</a>` : '<span class="muted">—</span>'}</td>
+        <td><span class="stage s-${c.stage}">${ST[c.stage]}</span></td>
+        <td class="hide-m">${c.sent_date ? fd(c.sent_date) : '<span class="muted">—</span>'}</td>
+        <td class="hide-m">${esc(c.made_by)}</td>
+        <td class="num hide-m">${c.stage==='novy' ? `<button class="btn sm" data-stage-to="odeslano" data-id="${c.id}">Odesláno</button>` : c.stage==='odeslano' ? `<button class="btn sm" data-stage-to="zajem" data-id="${c.id}">Má zájem</button>` : ''}</td>
+      </tr>`).join('')}</tbody></table>
+      ${list.length ? '' : '<div class="empty">Nic tu není.</div>'}
+    </div>
+  </div>`;
+  const qi = $('#leadQ'); qi.addEventListener('input', () => { S.leadQ = qi.value; const pos = qi.selectionStart; vLeady(v); const n = $('#leadQ'); n.focus(); n.setSelectionRange(pos,pos); });
+  $('#leadBy').addEventListener('change', e => { S.leadBy = e.target.value; vLeady(v); });
+}
+
+function vPenize(v){
+  const y = new Date().getFullYear() + '-01-01', [m0s,m0e] = monthRange(0);
+  const pend = pending();
+  let list = S.money.slice();
+  if (S.moneyFilter !== 'all') list = list.filter(m => S.moneyFilter === 'ceka' ? m.status === 'ceka' : m.kind === S.moneyFilter);
+  v.innerHTML = pageTop('Peníze', 'Příjmy, výdaje a kdo ještě nezaplatil.', `<button class="btn gold" data-act="new-money">${ico('plus',16)}Platba</button>`) + `
+  <div class="grid kpis">
+    <div class="card kpi hl"><div class="lab">Přijato celkem</div><div class="val">${kc(income())}</div><div class="foot">letos ${kc(income(y))}</div></div>
+    <div class="card kpi"><div class="lab">Výdaje celkem</div><div class="val">${kc(costs())}</div><div class="foot">letos ${kc(costs(y))}</div></div>
+    <div class="card kpi"><div class="lab">Zisk</div><div class="val">${kc(income() - costs())}</div><div class="foot">tento měsíc ${kc(income(m0s,m0e) - costs(m0s,m0e))}</div></div>
+    <div class="card kpi"><div class="lab">Čeká na zaplacení</div><div class="val">${kc(pend.reduce((s,m)=>s+m.amount,0))}</div><div class="foot">${pend.length} plateb</div></div>
+    <div class="card kpi"><div class="lab">Průměrná zakázka</div><div class="val">${(() => { const cl = S.clients.filter(c => c.stage==='uzavreny' && c.price); return cl.length ? kc(cl.reduce((s,c)=>s+c.price,0)/cl.length) : '—'; })()}</div><div class="foot">z uzavřených klientů</div></div>
+  </div>
+  <div class="card mt">
+    <div class="toolbar"><div class="chips">${[['all','Vše'],['ceka','Nezaplacené'],['prijem','Příjmy'],['vydaj','Výdaje']].map(([k,t]) => `<button class="chip" data-mf="${k}" aria-pressed="${S.moneyFilter===k}">${t}</button>`).join('')}</div></div>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Datum</th><th>Popis</th><th class="hide-m">Klient</th><th>Stav</th><th class="num">Částka</th><th></th></tr></thead>
+      <tbody>${list.map(m => { const c = client(m.client_id); return `<tr data-money="${m.id}">
+        <td>${fd(m.date)}</td>
+        <td><div class="nm">${esc(m.label || (m.kind==='vydaj'?'Výdaj':'Příjem'))}</div><div class="sub">${m.kind==='vydaj'?'výdaj':'příjem'} · zapsal ${esc(m.created_by)}</div></td>
+        <td class="hide-m">${c ? esc(c.name) : '<span class="muted">—</span>'}</td>
+        <td>${m.status==='ceka' ? '<span class="date-pill late">čeká</span>' : '<span class="date-pill" style="background:var(--ok-bg);color:var(--ok)">zaplaceno</span>'}</td>
+        <td class="num"><b style="color:${m.kind==='vydaj'?'var(--bad)':'inherit'}">${m.kind==='vydaj'?'−':''}${kc(m.amount)}</b></td>
+        <td class="num">${m.status==='ceka' ? `<button class="btn sm" data-paid="${m.id}">${ico('check',15)}<span class="hide-m">Zaplaceno</span></button>` : ''}</td>
+      </tr>`; }).join('')}</tbody></table>
+      ${list.length ? '' : '<div class="empty">Zatím žádné platby. Až klient zaplatí, přidejte ji tlačítkem Platba.</div>'}
+    </div>
+  </div>
+  <div class="card mt"><div class="card-h"><h2>Po měsících</h2></div>${monthsChart(6)}</div>`;
+}
+
+function vAktivita(v){
+  const wk = addDays(monday(today()), 7*S.week), we = addDays(wk, 6);
+  const acts = actors(); const kinds = Object.keys(KINDS);
+  const m = {}; acts.forEach(a => m[a] = sumAct(wk, we, x => x.actor === a));
+  const tot = sumAct(wk, we);
+  const feed = S.activity.filter(a => a.date >= addDays(today(), -30)).slice(0, 80);
+  const label = S.week === 0 ? 'Tento týden' : S.week === -1 ? 'Minulý týden' : `Týden od ${fd(wk)}`;
+  v.innerHTML = pageTop('Aktivita', 'Kolik webů kdo udělal, kolik se odeslalo a kdo odpověděl. Claude sem zapisuje sám.', `<button class="btn gold" data-act="new-log">${ico('plus',16)}Záznam práce</button>`) + `
+  <div class="card">
+    <div class="card-h"><h2>${label}</h2><div class="weeknav">
+      <button class="icon-btn" data-week="-1" aria-label="Předchozí týden">${ico('left')}</button>
+      <span class="muted" style="font-size:13px">${fd(wk)} – ${fd(we)}</span>
+      <button class="icon-btn" data-week="1" aria-label="Další týden" ${S.week>=0?'disabled style="opacity:.3"':''}>${ico('right')}</button></div></div>
+    <div class="tbl-wrap"><table class="matrix">
+      <thead><tr><th>Kdo</th>${kinds.map(k => `<th>${KIND_SHORT[k]}</th>`).join('')}</tr></thead>
+      <tbody>${acts.map(a => `<tr><td><b>${esc(a)}</b></td>${kinds.map(k => `<td class="${m[a][k]?'':'z'}">${m[a][k]||'·'}</td>`).join('')}</tr>`).join('')}</tbody>
+      <tfoot><tr><td>Celkem</td>${kinds.map(k => `<td>${tot[k]}</td>`).join('')}</tr></tfoot>
+    </table></div>
+  </div>
+  <div class="grid cols-2 mt">
+    <div class="card"><div class="card-h"><h2>Posledních 8 týdnů</h2><div class="legend"><span><i style="background:var(--gold-3)"></i>weby</span><span><i style="background:var(--gold)"></i>odesláno</span></div></div>${weeksChart(8)}</div>
+    <div class="card"><div class="card-h"><h2>Záznamy</h2><span class="muted" style="font-size:13px">30 dní</span></div>
+      ${feed.length ? `<ul class="feed">${feed.map(a => `<li><span class="dot ${/claude/i.test(a.actor)?'c':''}">${/claude/i.test(a.actor) ? esc(a.actor.replace(/claude\s*/i,'C')) : esc(initials(a.actor))}</span>
+        <div><b>${a.count}× ${esc(KINDS[a.kind] ? KIND_SHORT[a.kind].toLowerCase() : a.kind)}</b> <span class="muted">· ${esc(a.actor)} · ${fd(a.date)}</span>${a.note ? `<div class="muted" style="font-size:13px">${esc(a.note)}</div>` : ''}</div>
+        <button class="icon-btn x" data-del-act="${a.id}" aria-label="Smazat záznam">${ico('x',15)}</button></li>`).join('')}</ul>` : '<div class="empty">Zatím nic.</div>'}
+    </div>
+  </div>`;
+}
+
+/* ---------- dialogy ---------- */
+const dlg = $('#dlg');
+function openDlg(html){ dlg.innerHTML = html; if (!dlg.open) dlg.showModal(); }
+dlg.addEventListener('close', () => render());
+dlg.addEventListener('click', e => { if (e.target === dlg) dlg.close(); });
+
+function openClient(c = {}, preset = {}){
+  const isNew = !c.id; c = { stage:'zajem', price:6999, made_by:'', ...c, ...preset };
+  const pays = isNew ? [] : S.money.filter(m => m.client_id === c.id);
+  const acts = isNew ? [] : S.activity.filter(a => a.client_id === c.id).slice(0,8);
+  const opt = (arr, cur) => arr.map(x => `<option ${x===cur?'selected':''}>${esc(x)}</option>`).join('');
+  const f = (n, l, type='text', full=false, extra='') => `<label class="field ${full?'full':''}"><span>${l}</span><input class="inp" type="${type}" name="${n}" value="${esc(c[n] ?? '')}" ${extra}></label>`;
+  openDlg(`<form method="dialog" id="cf">
+    <div class="m-h"><h2>${isNew ? 'Nový klient' : esc(c.name)}</h2><button type="button" class="icon-btn" data-close aria-label="Zavřít">${ico('x')}</button></div>
+    <div class="m-b">
+      ${!isNew ? `<div class="links">${c.phone?`<a href="tel:${esc(c.phone.replace(/\s/g,''))}">Zavolat ${esc(c.phone)}</a>`:''}${c.email?`<a href="mailto:${esc(c.email.split(',')[0].trim())}">Napsat e-mail</a>`:''}${c.preview?`<a href="${esc(href(c.preview))}" target="_blank" rel="noopener">Náhled webu</a>`:''}${c.web?`<a href="${esc(href(c.web))}" target="_blank" rel="noopener">Starý web</a>`:''}</div>` : ''}
+      <div class="stage-pick" role="radiogroup" aria-label="Fáze">${STAGES.map(s => `<label><input type="radio" name="stage" value="${s.k}" ${c.stage===s.k?'checked':''}><span class="stage s-${s.k}">${s.t}</span></label>`).join('')}</div>
+      <div class="dup hidden" id="dup"></div>
+      <div class="form-grid">
+        ${f('name','Firma / jméno *','text',true,'required')}
+        ${f('person','Kontaktní osoba')}${f('phone','Telefon','tel')}
+        ${f('email','E-mail')}${f('city','Město')}
+        ${f('next_date','Ozvat se dne','date')}${f('next_action','Co udělat (napsat, zavolat…)')}
+        ${f('price','Cena (Kč)','number')}${f('sent_date','Návrh odeslán','date')}
+        ${f('preview','Náhled webu (odkaz)')}${f('web','Současný web')}
+        <label class="field"><span>Web dělal</span><select class="inp" name="made_by"><option value="">—</option>${opt(actors(), c.made_by)}</select></label>
+        ${f('source','Zdroj (odkud lead)')}
+        <label class="field"><span>Klienta řeší</span><select class="inp" name="owner"><option value="">— zatím nikdo —</option>${opt(PEOPLE, c.owner)}</select></label>
+        <label class="field full"><span>Poznámka</span><textarea class="inp" name="note">${esc(c.note)}</textarea></label>
+      </div>
+      ${!isNew ? `<div class="sub-list"><div class="card-h" style="margin-bottom:4px"><h3>Platby</h3><button type="button" class="btn sm" data-act="client-money">${ico('plus',14)}Platba</button></div>
+        ${pays.length ? pays.map(m => `<div class="row"><span>${fd(m.date)} · ${esc(m.label)} ${m.status==='ceka'?'<span class="date-pill late">čeká</span>':''}</span><b>${m.kind==='vydaj'?'−':''}${kc(m.amount)}</b></div>`).join('') : '<div class="muted" style="font-size:14px">Zatím žádné.</div>'}
+        ${acts.length ? `<h3 style="margin-top:14px">Historie</h3>${acts.map(a => `<div class="row"><span>${fd(a.date)} · ${esc(KINDS[a.kind]||a.kind)}</span><span class="muted">${esc(a.actor)}</span></div>`).join('')}` : ''}
+        <div class="muted" style="font-size:12.5px;margin-top:10px">Naposledy upravil ${esc(c.updated_by||'—')} · ${fd(c.updated_at)}</div></div>` : ''}
+    </div>
+    <div class="m-f">${!isNew ? `<button type="button" class="btn ghost danger left" data-act="del-client">Smazat</button>` : ''}
+      <button type="button" class="btn" data-close>Zrušit</button><button class="btn gold" type="submit">Uložit</button></div>
+  </form>`);
+  const form = $('#cf');
+  if (isNew) {
+    const chk = () => {
+      const d = Object.fromEntries(new FormData(form));
+      const nn = s => String(s||'').toLowerCase().replace(/[^a-z0-9áčďéěíňóřšťúůýž@.]/g,'');
+      const ph = s => String(s||'').replace(/\D/g,'').slice(-9);
+      const hits = S.clients.filter(x => (nn(d.name).length > 3 && (nn(x.name).includes(nn(d.name)) || nn(d.name).includes(nn(x.name)) && nn(x.name).length > 3))
+        || (d.email && x.email && x.email.toLowerCase().includes(d.email.toLowerCase().trim()) && d.email.trim().length > 5)
+        || (ph(d.phone).length === 9 && ph(x.phone) === ph(d.phone))).slice(0,3);
+      const box = $('#dup'); box.classList.toggle('hidden', !hits.length);
+      box.innerHTML = hits.length ? `<b>Tenhle klient už možná v databázi je.</b>${hits.map(h => `<div class="row"><span>${esc(h.name)} <span class="stage s-${h.stage}">${ST[h.stage]}</span>${h.owner ? ` · řeší ${esc(h.owner)}` : ''}</span><button type="button" class="btn sm" data-reopen="${h.id}">Otevřít</button></div>`).join('')}` : '';
+      box.querySelectorAll('[data-reopen]').forEach(b => b.onclick = () => openClient(client(b.dataset.reopen)));
+    };
+    form.addEventListener('input', e => { if (['name','email','phone'].includes(e.target.name)) chk(); });
+  }
+  form.querySelector('[data-act="client-money"]')?.addEventListener('click', () => openMoney({ client_id:c.id, amount:c.price||0, label:'Web – '+c.name, kind:'prijem', status:'zaplaceno', date:today() }, false, c));
+  form.querySelector('[data-act="del-client"]')?.addEventListener('click', async () => {
+    if (!confirm(`Opravdu smazat „${c.name}“? Nejde to vrátit.`)) return;
+    try { await api('DELETE','/api/clients/'+c.id); S.clients = S.clients.filter(x => x.id !== c.id); dlg.close(); toast('Smazáno'); } catch (err) { toast(err.message, true); }
+  });
+  form.addEventListener('submit', async e => {
+    e.preventDefault();
+    const d = Object.fromEntries(new FormData(form)); d.price = +d.price || 0;
+    const oldStage = c.stage;
+    try {
+      const r = isNew ? await api('POST','/api/clients', d) : await api('PATCH','/api/clients/'+c.id, d);
+      upsert(S.clients, r);
+      if ((isNew || oldStage !== r.stage) && STAGE_KIND[r.stage]) await logAct(STAGE_KIND[r.stage], 1, { client_id: r.id, note: r.name });
+      dlg.close(); toast(isNew ? 'Klient přidán' : 'Uloženo');
+      if (r.stage === 'uzavreny' && oldStage !== 'uzavreny' && !S.money.some(m => m.client_id === r.id))
+        setTimeout(() => openMoney({ client_id:r.id, amount:r.price||6999, status:'ceka', label:'Web – '+r.name, kind:'prijem', date:today() }, true), 50);
+    } catch (err) { toast(err.message, true); }
+  });
+}
+
+function openMoney(m = {}, fromClose = false, back = null){
+  const isNew = !m.id; m = { kind:'prijem', status:'zaplaceno', date:today(), ...m };
+  const cl = S.clients.slice().sort((a,b) => (ACTIVE.concat('uzavreny').includes(b.stage) - ACTIVE.concat('uzavreny').includes(a.stage)) || a.name.localeCompare(b.name,'cs'));
+  openDlg(`<form method="dialog" id="mf">
+    <div class="m-h"><h2>${isNew ? (fromClose ? 'Klient uzavřen – platba' : 'Nová platba') : 'Platba'}</h2><button type="button" class="icon-btn" data-close aria-label="Zavřít">${ico('x')}</button></div>
+    <div class="m-b">${fromClose ? '<p class="muted" style="margin-top:0">Zapište, kolik má klient zaplatit. Zůstane v „Čeká na zaplacení“, dokud ji neoznačíte jako zaplacenou.</p>' : ''}
+      <div class="stage-pick">${[['prijem','Příjem'],['vydaj','Výdaj']].map(([k,t]) => `<label><input type="radio" name="kind" value="${k}" ${m.kind===k?'checked':''}><span class="stage ${k==='prijem'?'s-zajem':'s-odmitl'}">${t}</span></label>`).join('')}
+        ${[['zaplaceno','Zaplaceno'],['ceka','Čeká na zaplacení']].map(([k,t]) => `<label><input type="radio" name="status" value="${k}" ${m.status===k?'checked':''}><span class="stage ${k==='zaplaceno'?'s-uzavreny':'s-schuzka'}">${t}</span></label>`).join('')}</div>
+      <div class="form-grid">
+        <label class="field"><span>Částka (Kč) *</span><input class="inp" type="number" name="amount" required min="0" value="${esc(m.amount ?? '')}"></label>
+        <label class="field"><span>Datum</span><input class="inp" type="date" name="date" value="${esc(m.date)}"></label>
+        <label class="field full"><span>Popis</span><input class="inp" name="label" value="${esc(m.label)}" placeholder="Web – firma, hosting, doména…"></label>
+        <label class="field full"><span>Klient</span><select class="inp" name="client_id"><option value="">— bez klienta —</option>${cl.map(c => `<option value="${c.id}" ${c.id===m.client_id?'selected':''}>${esc(c.name)} · ${ST[c.stage]}</option>`).join('')}</select></label>
+      </div>
+    </div>
+    <div class="m-f">${!isNew ? `<button type="button" class="btn ghost danger left" data-act="del">Smazat</button>` : ''}
+      <button type="button" class="btn" data-close>${fromClose ? 'Teď ne' : 'Zrušit'}</button><button class="btn gold" type="submit">Uložit</button></div>
+  </form>`);
+  const form = $('#mf');
+  form.querySelector('[data-act="del"]')?.addEventListener('click', async () => {
+    if (!confirm('Smazat tuto platbu?')) return;
+    try { await api('DELETE','/api/money/'+m.id); S.money = S.money.filter(x => x.id !== m.id); dlg.close(); toast('Smazáno'); } catch (err) { toast(err.message, true); }
+  });
+  form.addEventListener('submit', async e => {
+    e.preventDefault();
+    const d = Object.fromEntries(new FormData(form)); d.amount = +d.amount || 0; d.client_id = d.client_id ? +d.client_id : null;
+    try { const r = isNew ? await api('POST','/api/money', d) : await api('PATCH','/api/money/'+m.id, d); upsert(S.money, r); S.money.sort((a,b)=>b.date.localeCompare(a.date)||b.id-a.id);
+      toast('Platba uložena'); if (back) openClient(client(back.id)); else dlg.close(); } catch (err) { toast(err.message, true); }
+  });
+}
+
+function openLog(){
+  const acts = actors();
+  openDlg(`<form method="dialog" id="lf">
+    <div class="m-h"><h2>Záznam práce</h2><button type="button" class="icon-btn" data-close aria-label="Zavřít">${ico('x')}</button></div>
+    <div class="m-b"><p class="muted" style="margin-top:0">Např. „dnes Claude 2 udělal 6 webů“ nebo „odesláno 20 návrhů“. Přesun klienta mezi fázemi se zapisuje sám.</p>
+      <div class="form-grid">
+        <label class="field"><span>Kdo</span><select class="inp" name="actor">${acts.map(a => `<option ${a===S.user?'selected':''}>${esc(a)}</option>`).join('')}</select></label>
+        <label class="field"><span>Datum</span><input class="inp" type="date" name="date" value="${today()}"></label>
+        <label class="field"><span>Co</span><select class="inp" name="kind">${Object.entries(KINDS).map(([k,t]) => `<option value="${k}">${t}</option>`).join('')}</select></label>
+        <label class="field"><span>Kolik</span><input class="inp" type="number" name="count" value="1" min="1" required></label>
+        <label class="field full"><span>Poznámka</span><input class="inp" name="note" placeholder="nepovinné"></label>
+      </div></div>
+    <div class="m-f"><button type="button" class="btn" data-close>Zrušit</button><button class="btn gold" type="submit">Zapsat</button></div>
+  </form>`);
+  $('#lf').addEventListener('submit', async e => {
+    e.preventDefault(); const d = Object.fromEntries(new FormData(e.target)); d.count = +d.count || 1;
+    try { const r = await api('POST','/api/activity', d); S.activity.unshift(r); S.activity.sort((a,b)=>b.date.localeCompare(a.date)||b.id-a.id); dlg.close(); toast('Zapsáno'); } catch (err) { toast(err.message, true); }
+  });
+}
+
+/* ---------- události ---------- */
+document.addEventListener('click', async e => {
+  const t = e.target.closest('[data-close],[data-act],[data-open],[data-done],[data-money],[data-paid],[data-stage-to],[data-lf],[data-mf],[data-own],[data-week],[data-del-act],[data-stop]');
+  if (!t) return;
+  if (t.hasAttribute('data-stop')) return;
+  if (t.hasAttribute('data-close')) { dlg.close(); return; }
+  if (t.dataset.act === 'new-client') return openClient({}, t.dataset.stage ? { stage: t.dataset.stage } : {});
+  if (t.dataset.act === 'new-money') return openMoney();
+  if (t.dataset.act === 'new-log') return openLog();
+  if (t.dataset.act === 'toggle-lost') { S.showLost = !S.showLost; return render(); }
+  if (t.dataset.stageTo) { e.stopPropagation(); return setStage(client(t.dataset.id), t.dataset.stageTo); }
+  if (t.dataset.done) { const c = client(t.dataset.done); try { const r = await api('PATCH','/api/clients/'+c.id, { next_date:'', next_action:'' }); upsert(S.clients, r); toast('Vyřízeno – ' + c.name); render(); } catch (err) { toast(err.message, true); } return; }
+  if (t.dataset.paid) { e.stopPropagation(); try { const r = await api('PATCH','/api/money/'+t.dataset.paid, { status:'zaplaceno', date: today() }); upsert(S.money, r); toast('Označeno jako zaplacené'); render(); } catch (err) { toast(err.message, true); } return; }
+  if (t.dataset.money) return openMoney(S.money.find(m => m.id === +t.dataset.money));
+  if (t.dataset.lf) { S.leadFilter = t.dataset.lf; return render(); }
+  if (t.dataset.own !== undefined) { S.owner = t.dataset.own; return render(); }
+  if (t.dataset.mf) { S.moneyFilter = t.dataset.mf; return render(); }
+  if (t.dataset.week) { if (t.disabled) return; S.week = Math.min(0, S.week + +t.dataset.week); return render(); }
+  if (t.dataset.delAct) { if (!confirm('Smazat záznam?')) return; try { await api('DELETE','/api/activity/'+t.dataset.delAct); S.activity = S.activity.filter(a => a.id !== +t.dataset.delAct); render(); } catch (err) { toast(err.message, true); } return; }
+  if (t.dataset.open) return openClient(client(t.dataset.open));
+});
+
+function route(){
+  const k = location.hash.slice(1); S.view = VIEWS.some(v => v.k === k) ? k : 'prehled';
+  store.set('rx_view', S.view); if (S.token) { render(); window.scrollTo(0,0); }
+}
+window.addEventListener('hashchange', route);
+
+function start(){
+  $('#login').classList.add('hidden'); $('#app').classList.remove('hidden');
+  if (!location.hash) { const v = store.get('rx_view'); if (v) history.replaceState(null, '', '#' + v); }
+  route(); load();
+}
+setInterval(() => { if (S.token && document.visibilityState === 'visible') load(true); }, 60000);
+document.addEventListener('visibilitychange', () => { if (S.token && document.visibilityState === 'visible') load(true); });
+
+S.token = store.get('rx_token'); S.user = store.get('rx_user');
+if (S.token) start(); else showLogin();
+</script>
+</body>
+</html>

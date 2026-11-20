@@ -1,0 +1,9 @@
+{
+  "name": "rovenixa-crm",
+  "main": "worker.js",
+  "compatibility_date": "2026-11-01",
+  "workers_dev": true,
+  "d1_databases": [
+    { "binding": "DB", "database_name": "rovenixa-crm", "database_id": "bc013284-973a-4bb2-bc30-deeafa71288f" }
+  ]
+}
