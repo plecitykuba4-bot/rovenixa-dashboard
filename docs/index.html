@@ -967,6 +967,23 @@ function vLeady(v){
   const cntN = n => leads.filter(c => ['followup','ceka'].includes(st.get(c.id).k) && st.get(c.id).n === n && inDrawer(c)).length;
   const cntBy = (k, m) => leads.filter(c => st.get(c.id).k === k && c.made_by === m).length;
   const q = S.leadQ.trim().toLowerCase();
+  /* hledání: přes všechny firmy a klienty bez ohledu na seznam; telefon podle číslic (mezery, +420) */
+  const qd = (() => { const d = q.replace(/\D/g, ''); return d.length > 9 ? d.slice(-9) : d; })();
+  const phDigits = c => String(c.phone || '').replace(/\D/g, '');
+  const matchQ = c => [c.name,c.city,c.email,c.phone,c.person,c.preview,c.note].join(' ').toLowerCase().includes(q) || (qd.length >= 3 && phDigits(c).includes(qd));
+  const searchTable = () => {
+    const hits = S.clients.filter(matchQ).sort((x, y) => (qd.length >= 3 && phDigits(y).includes(qd)) - (qd.length >= 3 && phDigits(x).includes(qd)) || x.name.localeCompare(y.name, 'cs'));
+    const stg = c => st.has(c.id) ? `<span class="stage ${st.get(c.id).cls}">${esc(st.get(c.id).t)}</span>` : `<span class="stage s-${c.stage}">${esc(ST[c.stage] || c.stage)}</span>`;
+    const tel = c => c.phone ? `<a href="tel:${esc(c.phone.replace(/\s/g,''))}" data-stop><b>${esc(c.phone)}</b></a>` : '<span class="muted">—</span>';
+    return `<div class="tbl-wrap"><table class="leads">
+      <thead><tr><th>Firma</th><th>Telefon</th><th>Stav</th><th class="hide-m">E-mail</th><th class="hide-m">Poslední zpráva</th></tr></thead>
+      <tbody>${hits.slice(0,100).map(c => `<tr data-open="${c.id}">
+        <td><div class="nm">${esc(c.name)}</div><div class="sub">${esc([c.person, c.city].filter(Boolean).join(' · '))}</div></td>
+        <td>${tel(c)}</td><td>${stg(c)}</td>
+        <td class="hide-m">${esc(c.email || '')}</td>
+        <td class="hide-m note-cell">${esc(lastNote(c)) || '<span class="muted">—</span>'}</td></tr>`).join('')}</tbody></table>
+      ${hits.length ? `<div class="sub" style="padding:8px 4px">Nalezeno ${hits.length} ve všech firmách a klientech.</div>` : '<div class="empty">Nic takového tu není.</div>'}</div>`;
+  };
   const f = S.leadFilter;
   let list = leads.filter(c => {
     const k = st.get(c.id).k;
@@ -1035,7 +1052,7 @@ function vLeady(v){
       <input class="inp search" type="search" placeholder="Hledat firmu, město, telefon…" value="${esc(S.leadQ)}" id="leadQ">
       <select class="inp" id="leadMore"><option value="">Další seznamy…</option>${MORE.map(([k,t]) => `<option value="${k}" ${f===k?'selected':''}>${t} (${k==='odeslano' ? cnt('ceka') + cnt('zavolat') + cnt('followup') + cnt('ticho') : k==='vse' ? leads.filter(inDrawer).length - cnt('odmitl') : cnt(k)})</option>`).join('')}</select>
     </div>
-    ${FU.includes(f) ? fuTable() : `<div class="tbl-wrap"><table class="leads">
+    ${q ? searchTable() : FU.includes(f) ? fuTable() : `<div class="tbl-wrap"><table class="leads">
       <thead><tr><th>Firma</th><th>Stav</th><th class="hide-m">Návštěvy webu</th><th class="hide-m">Odesláno</th><th class="hide-m">Poslední zpráva</th><th class="num">Co udělat</th></tr></thead>
       <tbody>${list.slice(0,400).map(c => { const s2 = st.get(c.id); return `<tr data-open="${c.id}">
         <td><div class="nm">${esc(c.name)}</div><div class="sub">${esc(c.city)}${c.preview ? ` · <a href="${esc(href(c.preview))}?ja=1" target="_blank" rel="noopener" data-stop>náhled</a>` : ''}</div></td>
