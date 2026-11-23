@@ -260,6 +260,12 @@ table.leads td{vertical-align:top}
 .leads tr.fu-late td{background:#FBF1EE}
 .fu-done{margin:14px 4px 4px;font-size:14px}.fu-done summary{cursor:pointer;color:var(--ink-3);font-weight:600;padding:6px 0}
 .fu-done .row{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-top:1px solid var(--line);cursor:pointer}
+.inq{border:2px solid var(--gold);background:var(--gold-bg);padding:18px 20px;box-shadow:0 0 0 4px color-mix(in srgb,var(--gold) 14%,transparent)}
+.inq-h{display:flex;gap:14px;align-items:center;margin-bottom:10px;font-size:18px}
+.inq-n{display:grid;place-items:center;min-width:38px;height:38px;border-radius:99px;background:var(--gold);color:#fff;font-weight:700;font-size:18px}
+.inq-h .muted{font-size:13.5px;font-weight:400}
+.inq-r{display:flex;justify-content:space-between;gap:14px;align-items:flex-start;padding:12px 0;border-top:1px solid color-mix(in srgb,var(--gold) 30%,transparent)}
+.inq-c{margin-top:3px;font-size:15px;font-weight:600}.inq-c a{color:var(--ink)}
 .replies{border-color:var(--ok);padding:14px 18px}
 .row.visit{align-items:flex-start}.row.visit .vd{display:block;font-size:12.5px;color:var(--ink-3);font-weight:400}.row.visit.clovek b,.row.visit.clovek2 b{color:var(--ok)}.row.visit.robot b{color:var(--ink-3);font-weight:500}
 .feed{list-style:none;margin:0;padding:0}
@@ -541,8 +547,17 @@ const BUCKETS = [
   ['hotovo', 'Odeslat návrh', 'web je hotový'],
   ['lead', 'Udělat web', 'lead bez webu'],
 ];
+function inquiriesBox(){
+  const xs = S.clients.filter(c => +c.reply_new && c.source === 'web rovenixa.com').sort((a,b) => (b.reply_at||'').localeCompare(a.reply_at||''));
+  if (!xs.length) return '';
+  return `<div class="card inq mt"><div class="inq-h"><span class="inq-n">${xs.length}</span><div><b>${xs.length === 1 ? 'Nová poptávka z webu' : `Nové poptávky z webu`}</b><div class="muted">Někdo vyplnil formulář na rovenixa.com. Ozvěte se mu do dvou pracovních dnů.</div></div></div>
+    ${xs.map(c => { const mail = c.email ? `<a href="mailto:${esc(c.email)}">${esc(c.email)}</a>` : ''; const tel = c.phone ? `<a href="tel:${esc(String(c.phone).replace(/\s/g,''))}">${esc(c.phone)}</a>` : '';
+      return `<div class="inq-r"><div class="rp-t" data-open="${c.id}"><b>${esc(c.name)}</b> <span class="muted">${new Date(c.reply_at).toLocaleString('cs-CZ',{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'})}</span>
+        <div class="inq-c">${[tel, mail].filter(Boolean).join(' · ')}</div><div class="rp-x">${esc(String(c.reply_text||'').slice(0, 400))}</div></div>
+        <div class="acts"><button class="btn sm gold" data-open="${c.id}">Otevřít</button><button class="btn sm" data-seen-reply="${c.id}" title="Označit jako vyřízené">Vyřízeno</button></div></div>`; }).join('')}</div>`;
+}
 function repliesBox(full){
-  const xs = S.clients.filter(c => +c.reply_new).sort((a,b) => (b.reply_at||'').localeCompare(a.reply_at||''));
+  const xs = S.clients.filter(c => +c.reply_new && c.source !== 'web rovenixa.com').sort((a,b) => (b.reply_at||'').localeCompare(a.reply_at||''));
   if (!xs.length) return '';
   return `<div class="card replies mt"><div class="rp-h"><b>${xs.length === 1 ? 'Odepsala 1 firma' : `Odepsaly ${xs.length} firmy`}</b><span class="muted"> – přečíst a zařadit (z Gmailu)</span></div>
     ${xs.slice(0, full ? 50 : 5).map(c => `<div class="rp">
@@ -849,7 +864,7 @@ function vPrehled(v){
   </div>
 
   ${briefCard()}
-  ${repliesBox(false)}
+  ${inquiriesBox()}${repliesBox(false)}
   <div class="flow mt">
     <a class="flow-step f-zavolat" href="#leady" data-goto="zavolat"><span class="n">${nZav}</span><span class="t">Zavolat</span><span class="d">viděli web, neozvali se · volají oba</span></a>
     <a class="flow-step f-followup" href="#leady" data-goto="followup"><span class="n">${nFu}</span><span class="t">Follow-up dnes</span><span class="d">${byD(c => c.stage === 'odeslano' && leadState(c).k === 'followup')}</span></a>
@@ -1041,7 +1056,7 @@ function vLeady(v){
   };
 
   v.innerHTML = pageTop('Leady', 'Od nalezené firmy po odpověď. Kdo odpoví se zájmem, přejde do Klientů.', BTN_CLIENT) + `
-  ${repliesBox(true)}
+  ${inquiriesBox()}${repliesBox(true)}
   <div class="flow mt">
     ${BUCKETS.map(([k,t,d]) => `<button class="flow-step ${f===k || (k==='followup' && (f==='fu1'||f==='fu2')) || (f==='akce' && (k==='zavolat'||k==='followup')) ? 'on' : ''} f-${k}" data-lf="${k}"><span class="n">${cnt(k)}</span><span class="t">${t}</span><span class="d">${SHARED.includes(k) ? d + ' · volají oba' : `<span class="drawers">${DRAWERS.map(([m,n]) => `<span>${n} <b>${cntBy(k,m)}</b></span>`).join('')}</span>`}</span></button>`).join('')}
   </div>
