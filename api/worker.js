@@ -139,7 +139,7 @@ export default {
           const done = [];
           // Odeslané maily (Gmail → Odeslané): první „Návrh nového webu…“ = odesláno, „Připomenutí…“ = follow-up.
           // Každý mail se počítá jen jednou (tabulka sent_mail), follow-up max 1× za den na firmu.
-          for (const s of sent.slice(0, 300)) {
+          for (const s of [...sent].slice(0, 300).sort((x, y) => String(x.at).localeCompare(String(y.at)))) {
             const mid = String(s.id || '');
             if (!mid) continue;
             const subj = String(s.subject || '');
@@ -162,7 +162,7 @@ export default {
               hit.sent_date = day; what = 'doplněno datum';
             } else if (kind === 'followup' && hit.stage === 'odeslano') {
               const row = await env.DB.prepare('SELECT followups, last_followup, sent_date FROM clients WHERE id=?').bind(hit.id).first();
-              if (row && row.last_followup !== day && (row.sent_date || '') < day) {
+              if (row && day > (row.last_followup || '') && day > (row.sent_date || '')) {
                 await env.DB.prepare("UPDATE clients SET followups=?, last_followup=?, updated_at=datetime('now'), updated_by='Gmail' WHERE id=?").bind((row.followups || 0) + 1, day, hit.id).run();
                 await env.DB.prepare('INSERT INTO activity (date, actor, kind, count, client_id, note, created_by) VALUES (?,?,?,?,?,?,?)').bind(day, actor, 'followup', 1, hit.id, hit.name, 'Gmail').run();
                 what = 'follow-up zapsán';

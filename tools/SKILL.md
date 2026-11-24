@@ -89,3 +89,9 @@ Když `klient` vrátí „odpovídá víc klientům“, použij přesnější n�
 - Zapisuj hned po události, ne až na konci dne – oba to vidí živě.
 - Zapisuj jen to, co se opravdu stalo (odeslané maily, ne koncepty).
 - Google tabulku „weby Outreach“ už neplnit, evidence je jen tady.
+
+## Od 24. 11. 2026: Gmail zapisuje odeslané maily, „Možná viděl“
+- Apps Script v Gmailu (gmail/odpovedi.gs v repu, běží hodinně) hlásí i **odeslané** maily: „Návrh nového webu…“ → klient `odeslano` + `sent_date`, „Připomenutí…“ (nebo další mail ve vlákně bez odpovědi firmy) → follow-up +1. Každý mail se počítá jednou (D1 tabulka `sent_mail`), follow-up max 1× denně. Dokud skript v obou Gmailech není aktualizovaný, zapisuj ručně jako dřív.
+- Stránka Leady → Odeslat návrh má nahoře box „Odesláno za poslední 3 dny“ s tlačítkem Vrátit (omylem odesláno). `crm.py fronta` to ukazuje taky.
+- **Možná viděl – ověřit**: špion nic nezměřil (w=0), ale firmu otevřelo ≥2 zařízení z jejího města (v Praze ≥4). Není to jistota, jen důvod zavolat/ověřit. Stejná logika v dashboardu i v `crm.py fronta`.
+- Slug skriptu ve špionovi se občas liší od adresy náhledu (autoskola-lukes vs …-prostejov): shoda je rovnost, nebo začátek (≥10 znaků), nebo alias (SLUG_ALIAS v docs/index.html a ALIAS v crm.py). Nový nesoulad doplnit do obou.
