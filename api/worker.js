@@ -127,16 +127,50 @@ export default {
       if (p.startsWith('/api/mail/')) {
         const t = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
         if (!env.MAIL_KEY || !safeEq(t, env.MAIL_KEY)) return json(req, { error: 'Nepřihlášen' }, 401);
-        const all = (await env.DB.prepare("SELECT id, name, email, stage, note, reply_at FROM clients WHERE email <> ''").all()).results;
+        const all = (await env.DB.prepare("SELECT id, name, email, stage, note, reply_at, made_by, sent_date FROM clients WHERE email <> ''").all()).results;
         const mails = (c) => c.email.toLowerCase().split(/[,;\s]+/).filter((x) => x.includes('@'));
         if (p === '/api/mail/emails' && req.method === 'GET') {
           return json(req, { emails: [...new Set(all.flatMap(mails))] });
         }
         if (p === '/api/mail/report' && req.method === 'POST') {
-          const { replies = [], bounces = [] } = await req.json();
+          const { replies = [], bounces = [], sent = [] } = await req.json();
           const byMail = new Map();
           all.forEach((c) => mails(c).forEach((m) => byMail.set(m, c)));
           const done = [];
+          // Odeslané maily (Gmail → Odeslané): první „Návrh nového webu…“ = odesláno, „Připomenutí…“ = follow-up.
+          // Každý mail se počítá jen jednou (tabulka sent_mail), follow-up max 1× za den na firmu.
+          for (const s of sent.slice(0, 300)) {
+            const mid = String(s.id || '');
+            if (!mid) continue;
+            const subj = String(s.subject || '');
+            const kind = s.follow ? 'followup' : /^\s*(re:|fwd?:)/i.test(subj) ? null : /Připomenutí|Pripomeneni/i.test(subj) ? 'followup' : /Návrh nového webu|Navrh noveho webu/i.test(subj) ? 'navrh' : null;
+            if (!kind) continue;
+            const seen = await env.DB.prepare('SELECT id FROM sent_mail WHERE id=?').bind(mid).first();
+            if (seen) continue;
+            const day = String(s.at || new Date().toISOString()).slice(0, 10);
+            let hit = null;
+            for (const to of (s.to || []).slice(0, 10)) { const c = byMail.get(String(to).toLowerCase()); if (c) { hit = c; break; } }
+            if (!hit) { await env.DB.prepare('INSERT INTO sent_mail (id, client_id, kind, at) VALUES (?,?,?,?)').bind(mid, null, 'nezname', day).run(); continue; }
+            const actor = hit.made_by || s.who || 'Gmail';
+            let what = 'beze změny';
+            if (kind === 'navrh' && ['novy', 'studeny'].includes(hit.stage)) {
+              await env.DB.prepare("UPDATE clients SET stage='odeslano', sent_date=?, updated_at=datetime('now'), updated_by='Gmail' WHERE id=?").bind(day, hit.id).run();
+              await env.DB.prepare('INSERT INTO activity (date, actor, kind, count, client_id, note, created_by) VALUES (?,?,?,?,?,?,?)').bind(day, actor, 'odeslano', 1, hit.id, hit.name, 'Gmail').run();
+              hit.stage = 'odeslano'; hit.sent_date = day; what = 'odesláno';
+            } else if (kind === 'navrh' && hit.stage === 'odeslano' && !hit.sent_date) {
+              await env.DB.prepare("UPDATE clients SET sent_date=?, updated_at=datetime('now'), updated_by='Gmail' WHERE id=?").bind(day, hit.id).run();
+              hit.sent_date = day; what = 'doplněno datum';
+            } else if (kind === 'followup' && hit.stage === 'odeslano') {
+              const row = await env.DB.prepare('SELECT followups, last_followup, sent_date FROM clients WHERE id=?').bind(hit.id).first();
+              if (row && row.last_followup !== day && (row.sent_date || '') < day) {
+                await env.DB.prepare("UPDATE clients SET followups=?, last_followup=?, updated_at=datetime('now'), updated_by='Gmail' WHERE id=?").bind((row.followups || 0) + 1, day, hit.id).run();
+                await env.DB.prepare('INSERT INTO activity (date, actor, kind, count, client_id, note, created_by) VALUES (?,?,?,?,?,?,?)').bind(day, actor, 'followup', 1, hit.id, hit.name, 'Gmail').run();
+                what = 'follow-up zapsán';
+              }
+            }
+            await env.DB.prepare('INSERT INTO sent_mail (id, client_id, kind, at) VALUES (?,?,?,?)').bind(mid, hit.id, kind, day).run();
+            if (what !== 'beze změny') done.push({ id: hit.id, name: hit.name, kind: what });
+          }
           for (const r of replies.slice(0, 200)) {
             const c = byMail.get(String(r.email || '').toLowerCase());
             if (!c || (c.reply_at && c.reply_at >= r.at)) continue;
@@ -210,7 +244,8 @@ export default {
           if (!r.ok) return json(req, { error: 'Špión neodpovídá (' + r.status + ')' }, 502);
           const raw = await r.json();
           const slim = raw.map((v) => ({ site: v.site, t: v.t, trida: v.trida, verdikt: v.verdikt,
-            detail: v.detail, city: v.city, mobil: (v.w || 9999) < 800, sc: v.sc || 0, d: v.act || v.d || 0 }));
+            detail: v.detail, city: v.city, ref: String(v.ref || '').replace(/^https?:\/\//, '').split('/')[0],
+            mobil: (v.w || 9999) < 800, sc: v.sc || 0, d: v.act || v.d || 0 }));
           res = new Response(JSON.stringify(slim), { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'max-age=120' } });
           await cache.put(ck, res.clone());
         }

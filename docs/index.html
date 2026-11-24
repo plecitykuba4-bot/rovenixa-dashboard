@@ -239,6 +239,12 @@ dialog::backdrop{background:rgba(35,28,16,.38);backdrop-filter:blur(2px)}
 .hc-lab{font-size:12.5px;color:var(--ink-3);text-align:center;padding-top:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 @media (max-width:860px){.hc-cols{height:190px;gap:3px}.hc-v{font-size:11px}.hc-lab{font-size:11px}}
 .s-zavolat{background:#DDEBDD;color:#2E6B33}
+.s-zavolat.s-mozna{background:#F7EBCB;color:#7A5212;box-shadow:inset 0 0 0 1px #E5D19B}
+.seen.maybe{color:#7A5212}
+.sent-box{border:1px solid var(--line,#e6dfcf);border-radius:14px;padding:14px 16px;margin:0 0 14px;background:#FBF8F2}
+.sent-box h4{margin:0 0 8px;font-size:15px}
+.sent-box .row{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:6px 0;border-top:1px solid var(--line,#e6dfcf);font-size:14px;cursor:pointer}
+.sent-box .row:first-of-type{border-top:0}
 .s-followup{background:#F6E6C8;color:#7A5212}
 .flow{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
 .flow-step{display:grid;grid-template-columns:auto 1fr;grid-template-rows:auto auto;column-gap:14px;align-items:center;text-align:left;border:1px solid var(--line);background:var(--card);border-radius:var(--radius);padding:14px 18px;cursor:pointer;box-shadow:var(--shadow);text-decoration:none;color:var(--ink);font:inherit;transition:border-color .2s,background .2s}
@@ -502,14 +508,24 @@ async function load(silent){
 const FOLLOWUP_DAYS = 3, MAX_FOLLOWUPS = 2;
 const slugN = s => String(s || '').toLowerCase().replace(/^https?:\/\//, '').split(/[./]/)[0].replace(/-/g, '');
 const nameN = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+/* Název webu ve špionovi se občas liší od adresy náhledu (skript má kratší slug). Shoda = stejný slug, nebo jeden začíná druhým (min. 10 znaků), nebo výslovný alias. */
+const SLUG_ALIAS = { kosmetikajana: 'studiojanakosmetika', stavebnikutnahora: 'ktstavebni', divadelnipenzion: 'penzionbukovany' };
+const slugMatch = (k, sl) => { k = SLUG_ALIAS[k] || k; return k === sl || (Math.min(k.length, sl.length) >= 10 && (sl.startsWith(k) || k.startsWith(sl))); };
+/* město ze špionu je anglicky bez diakritiky (Prague, Pilsen, Ceske Budejovice), u firmy česky s dovětkem (Praha 5, Brno, Trnitá) */
+const cityKey = s => { let x = String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').split(/[,(–]|\s-\s/)[0].replace(/\d+/g, '').trim();
+  return x.replace(/^prague$/, 'praha').replace(/^pilsen$/, 'plzen').replace(/\s+/g, ' '); };
+const cityIs = (c, v) => { const a = cityKey(c.city), b = cityKey(v.city); return !!a && !!b && (a === b || a.startsWith(b + ' ') || b.startsWith(a + ' ')); };
 function visitsOf(c){
   const sl = slugN(c.preview), nm = nameN(c.name);
-  const vs = S.visits.filter(v => { const k = v.site.replace(/-/g, ''); return sl ? k === sl : (k.length > 5 && nm.startsWith(k)); });
+  const vs = S.visits.filter(v => { const k = v.site.replace(/-/g, ''); return sl ? slugMatch(k, sl) : (k.length > 5 && nm.startsWith(k)); });
   const from = c.sent_date || '9999';
   const after = vs.filter(v => v.t.slice(0,10) >= from);
   const human = after.filter(v => v.trida === 'clovek' || v.trida === 'clovek2');
   const sc = Math.max(0, ...human.map(v => +v.sc || 0)), dur = human.reduce((t, v) => t + (+v.d || 0), 0);
-  return { all: vs, after, human, last: human[0] || after[0] || null, sc, dur };
+  /* „možná viděl“: špion nic nezměřil (stránka se zavřela dřív), ale otevřelo ji víc zařízení z města firmy. V Praze až od 4 otevření (tam sedí i skenery e-mailů). */
+  const near = after.filter(v => v.trida === 'nevim' && cityIs(c, v));
+  const maybe = !human.length && near.length >= (cityKey(c.city) === 'praha' ? 4 : 2) ? near : [];
+  return { all: vs, after, human, maybe, last: human[0] || after[0] || null, sc, dur };
 }
 const dur = s => s < 60 ? `${s} s` : `${Math.floor(s / 60)} min${s % 60 ? ' ' + (s % 60) + ' s' : ''}`;
 /* šuplíky: každý Claude si bere follow-upy, odeslání i weby jen ze svého; Zavolat je společné */
@@ -535,6 +551,8 @@ function leadState(c){
   const v = visitsOf(c), fu = +c.followups || 0;
   const lastHuman = v.human[0] ? v.human[0].t.slice(0,10) : '';
   if (lastHuman && (!c.last_call || lastHuman > c.last_call)) return { k:'zavolat', t:'Viděl web – zavolat', cls:'s-zavolat', v };
+  const lastMaybe = v.maybe[0] ? v.maybe[0].t.slice(0,10) : '';
+  if (lastMaybe && (!c.last_call || lastMaybe > c.last_call)) return { k:'zavolat', maybe:true, t:'Možná viděl – ověřit', cls:'s-zavolat s-mozna', v };
   const due = fuDue(c), n = fu + 1;
   if (due && due <= today()) { const late = daysSince(due); return { k:'followup', n, due, t:`${n}. follow-up ${late ? `– ${late} ${late === 1 ? 'den' : late < 5 ? 'dny' : 'dní'} po termínu` : 'dnes'}`, cls:'s-followup', v }; }
   if (due) return { k:'ceka', n, due, t:`${n}. follow-up ${fd(due)}`, cls:'s-odeslano', v };
@@ -1011,7 +1029,8 @@ function vLeady(v){
   list = list.filter(inDrawer);
   if (q) list = list.filter(c => [c.name,c.city,c.email,c.phone,c.person,c.preview,c.note].join(' ').toLowerCase().includes(q));
   const order = { odepsal:-1, zavolat:0, followup:1, ceka:2, ticho:3, hotovo:4, lead:5, odmitl:6 };
-  list.sort((a,b) => order[st.get(a.id).k] - order[st.get(b.id).k] || (st.get(a.id).due||'9').localeCompare(st.get(b.id).due||'9') || ((st.get(b.id).v?.last?.t)||'').localeCompare((st.get(a.id).v?.last?.t)||'') || (b.sent_date||'').localeCompare(a.sent_date||''));
+  const ord = c => order[st.get(c.id).k] + (st.get(c.id).maybe ? .5 : 0);
+  list.sort((a,b) => ord(a) - ord(b) ||(st.get(a.id).due||'9').localeCompare(st.get(b.id).due||'9') || ((st.get(b.id).v?.last?.t)||'').localeCompare((st.get(a.id).v?.last?.t)||'') || (b.sent_date||'').localeCompare(a.sent_date||''));
   const FU = ['followup','fu1','fu2'];
   const chips = FU.includes(f) ? [['followup','1. i 2. follow-up', cntN(1) + cntN(2)], ['fu1','Jen 1. follow-up', cntN(1)], ['fu2','Jen 2. follow-up', cntN(2)]] : [];
   /* follow-upy: rozpis podle termínu – po termínu (červeně), dnes, zítra, později; odeslané až úplně na konci */
@@ -1038,6 +1057,14 @@ function vLeady(v){
       ${done.length && f !== 'fu1' ? `<details class="fu-done"><summary>Oba follow-upy už odeslané (${done.length})</summary>${done.map(c => `<div class="row" data-open="${c.id}"><span>${esc(c.name)}</span><span class="muted">2. follow-up ${fd(c.last_followup)} · ${esc(st.get(c.id).t)}</span></div>`).join('')}</details>` : ''}
     </div>`;
   };
+  /* nedávno odeslané (3 dny) – ať je vidět, co už odešlo, a jde omylem odeslané vrátit zpět */
+  const sentBox = () => {
+    const from = addDays(today(), -3);
+    const xs = leads.filter(c => c.stage === 'odeslano' && (c.sent_date || '') >= from && inDrawer(c))
+      .sort((a, b) => (b.sent_date || '').localeCompare(a.sent_date || '') || a.name.localeCompare(b.name, 'cs'));
+    if (!xs.length) return '';
+    return `<div class="sent-box"><h4>Odesláno za poslední 3 dny (${xs.length})</h4>${xs.map(c => `<div class="row" data-open="${c.id}"><span><b>${esc(c.name)}</b> <span class="muted">· ${esc(drawerOf(c))} · ${fd(c.sent_date)}${c.updated_by === 'Gmail' ? ' · zapsáno z Gmailu' : ''}</span></span><button class="btn sm" data-unsend="${c.id}" title="Omylem označeno jako odesláno">Vrátit mezi neodeslané</button></div>`).join('')}</div>`;
+  };
   const MORE = [['odeslano','Odesláno – čekají'], ['ticho','Bez reakce'], ['odmitl','Odmítli'], ['vse','Všechny leady']];
 
   const actions = c => {
@@ -1051,14 +1078,15 @@ function vLeady(v){
   };
   const seen = c => {
     const x = st.get(c.id).v; if (!x || !x.after.length) return '<span class="muted">—</span>';
-    const h = x.human.length;
+    const h = x.human.length, mb = x.maybe.length;
+    if (!h && mb) return `<span class="seen maybe" title="${esc(x.after.map(v => `${new Date(v.t).toLocaleString('cs-CZ',{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'})} · ${v.city || '?'}${v.ref ? ' · ' + v.ref.replace(/^https?:\/\//,'').split('/')[0] : ''}`).join('\n'))}">otevřeno ${x.after.length}× · ${mb}× z města firmy</span><div class="seen-m">stránka se zavřela dřív, než šlo měřit – <b>ověřit hovorem</b></div><div class="sub">${fd(x.after[0].t.slice(0,10))}</div>`;
     return `<span class="seen ${h ? 'yes' : ''}" title="${esc(x.after.map(v => `${new Date(v.t).toLocaleString('cs-CZ',{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'})} · ${v.verdikt}${v.detail ? ' · ' + v.detail : ''}`).join('\n'))}">${h ? `${ico('check',13)} viděl ${h}×` : `otevřeno ${x.after.length}×`}</span>${h ? `<div class="seen-m"><b>${x.sc} %</b> stránky · <b>${dur(x.dur)}</b></div>` : ''}<div class="sub">${fd(x.after[0].t.slice(0,10))}</div>`;
   };
 
   v.innerHTML = pageTop('Leady', 'Od nalezené firmy po odpověď. Kdo odpoví se zájmem, přejde do Klientů.', BTN_CLIENT) + `
   ${inquiriesBox()}${repliesBox(true)}
   <div class="flow mt">
-    ${BUCKETS.map(([k,t,d]) => `<button class="flow-step ${f===k || (k==='followup' && (f==='fu1'||f==='fu2')) || (f==='akce' && (k==='zavolat'||k==='followup')) ? 'on' : ''} f-${k}" data-lf="${k}"><span class="n">${cnt(k)}</span><span class="t">${t}</span><span class="d">${SHARED.includes(k) ? d + ' · volají oba' : `<span class="drawers">${DRAWERS.map(([m,n]) => `<span>${n} <b>${cntBy(k,m)}</b></span>`).join('')}</span>`}</span></button>`).join('')}
+    ${BUCKETS.map(([k,t,d]) => `<button class="flow-step ${f===k || (k==='followup' && (f==='fu1'||f==='fu2')) || (f==='akce' && (k==='zavolat'||k==='followup')) ? 'on' : ''} f-${k}" data-lf="${k}"><span class="n">${cnt(k)}</span><span class="t">${t}</span><span class="d">${SHARED.includes(k) ? d + ' · volají oba' + (leads.filter(c => st.get(c.id).maybe && inDrawer(c)).length ? ` · z toho ${leads.filter(c => st.get(c.id).maybe && inDrawer(c)).length} možná` : '') : `<span class="drawers">${DRAWERS.map(([m,n]) => `<span>${n} <b>${cntBy(k,m)}</b></span>`).join('')}</span>`}</span></button>`).join('')}
   </div>
   <div class="chips mt" style="align-items:center"><span class="muted" style="font-size:13px;margin-right:4px">Šuplík:</span>${[['','Oba'],...DRAWERS.map(([m,n]) => [m, n + ' · ' + m])].map(([k,t]) => `<button class="chip" data-drawer="${k}" aria-pressed="${S.leadBy===k}">${t}</button>`).join('')}</div>
   <div class="card mt">
@@ -1067,6 +1095,7 @@ function vLeady(v){
       <input class="inp search" type="search" placeholder="Hledat firmu, město, telefon…" value="${esc(S.leadQ)}" id="leadQ">
       <select class="inp" id="leadMore"><option value="">Další seznamy…</option>${MORE.map(([k,t]) => `<option value="${k}" ${f===k?'selected':''}>${t} (${k==='odeslano' ? cnt('ceka') + cnt('zavolat') + cnt('followup') + cnt('ticho') : k==='vse' ? leads.filter(inDrawer).length - cnt('odmitl') : cnt(k)})</option>`).join('')}</select>
     </div>
+    ${!q && f === 'hotovo' ? sentBox() : ''}
     ${q ? searchTable() : FU.includes(f) ? fuTable() : `<div class="tbl-wrap"><table class="leads">
       <thead><tr><th>Firma</th><th>Stav</th><th class="hide-m">Návštěvy webu</th><th class="hide-m">Odesláno</th><th class="hide-m">Poslední zpráva</th><th class="num">Co udělat</th></tr></thead>
       <tbody>${list.slice(0,400).map(c => { const s2 = st.get(c.id); return `<tr data-open="${c.id}">
@@ -1360,8 +1389,9 @@ function openLog(){
 
 /* ---------- události ---------- */
 document.addEventListener('click', async e => {
-  const t = e.target.closest('[data-close],[data-act],[data-open],[data-done],[data-money],[data-paid],[data-stage-to],[data-lf],[data-mf],[data-own],[data-drawer],[data-seen-reply],[data-reply],[data-fu],[data-goto],[data-week],[data-del-act],[data-stop]');
+  const t = e.target.closest('[data-close],[data-act],[data-open],[data-done],[data-money],[data-paid],[data-stage-to],[data-lf],[data-mf],[data-own],[data-drawer],[data-seen-reply],[data-reply],[data-fu],[data-unsend],[data-goto],[data-week],[data-del-act],[data-stop]');
   if (!t) return;
+  if (t.dataset.unsend) { e.stopPropagation(); const c = client(t.dataset.unsend); try { const r = await api('PATCH', '/api/clients/' + c.id, { stage: 'novy', sent_date: '' }); upsert(S.clients, r); toast(c.name + ': vráceno mezi neodeslané'); render(); } catch (err) { toast(err.message, true); } return; }
   if (t.hasAttribute('data-stop')) return;
   if (t.hasAttribute('data-close')) { dlg.close(); return; }
   if (t.dataset.act === 'new-client') return openClient({}, t.dataset.stage ? { stage: t.dataset.stage } : {});

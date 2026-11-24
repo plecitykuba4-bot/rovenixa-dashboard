@@ -237,20 +237,37 @@ def fronta(actor, vse=False):
     import re
     clients = call('GET', '/api/clients')
     visits = call('GET', '/api/visits')
+    import unicodedata
     slug = lambda u: re.sub(r'^https?://', '', (u or '').lower()).split('.')[0].split('/')[0].replace('-', '')
+    ALIAS = {'kosmetikajana': 'studiojanakosmetika', 'stavebnikutnahora': 'ktstavebni', 'divadelnipenzion': 'penzionbukovany'}  # stejné jako v dashboardu
+    def slug_match(k, sl):  # slug skriptu se občas liší od adresy náhledu (kratší) – shoda = rovnost, začátek (min. 10 znaků) nebo alias
+        k = ALIAS.get(k, k)
+        return k == sl or (min(len(k), len(sl)) >= 10 and (sl.startswith(k) or k.startswith(sl)))
+    def city_key(s):
+        x = unicodedata.normalize('NFD', str(s or '').lower()).encode('ascii', 'ignore').decode()
+        x = re.split(r'[,(–]|\s-\s', x)[0]
+        x = re.sub(r'\d+', '', x).strip()
+        return {'prague': 'praha', 'pilsen': 'plzen'}.get(x, re.sub(r'\s+', ' ', x))
+    def city_is(c, v):
+        a, b = city_key(c.get('city')), city_key(v.get('city'))
+        return bool(a and b and (a == b or a.startswith(b + ' ') or b.startswith(a + ' ')))
     claude = {'Jan': 'Claude 1', 'Jakub': 'Claude 2'}
     mine = lambda c: vse or c.get('made_by') == actor
     t = datetime.date.today()
-    zav, fu = [], []
+    zav, mozna, fu = [], [], []
     for c in clients:
         if c['stage'] != 'odeslano':
             continue
         sl = slug(c.get('preview'))
         sent = c.get('sent_date') or '9999'
-        hv = sorted((v for v in visits if sl and v['site'].replace('-', '') == sl
-                     and v['t'][:10] >= sent and v['trida'] in ('clovek', 'clovek2')), key=lambda v: v['t'], reverse=True)
+        after = [v for v in visits if sl and slug_match(v['site'].replace('-', ''), sl) and v['t'][:10] >= sent]
+        hv = sorted((v for v in after if v['trida'] in ('clovek', 'clovek2')), key=lambda v: v['t'], reverse=True)
         if hv and (not c.get('last_call') or hv[0]['t'][:10] > c['last_call']):
             zav.append((c, hv[0]['t'][:10], len(hv), max(int(v.get('sc') or 0) for v in hv), sum(int(v.get('d') or 0) for v in hv)))
+            continue
+        near = sorted((v for v in after if v['trida'] == 'nevim' and city_is(c, v)), key=lambda v: v['t'], reverse=True)
+        if not hv and len(near) >= (4 if city_key(c.get('city')) == 'praha' else 2) and (not c.get('last_call') or near[0]['t'][:10] > c['last_call']):
+            mozna.append((c, near[0]['t'][:10], len(near), len(after)))
             continue
         due = fu_due(c)
         if due and mine(c):
@@ -260,6 +277,10 @@ def fronta(actor, vse=False):
     print(f'ZAVOLAT – viděli web, volají oba ({len(zav)}):')
     for c, d, n, sc, du in zav:
         print(f"  #{c['id']:<4} {c['name'][:42]:<42} {c.get('phone') or '-':<14} viděl {n}×, prošel {sc} %, {du} s, naposledy {d}")
+    if mozna:
+        print(f'\nMOŽNÁ VIDĚL – špion nic nezměřil, ale víc otevření z města firmy; ověřit hovorem ({len(mozna)}):')
+        for c, d, n, tot in mozna:
+            print(f"  #{c['id']:<4} {c['name'][:42]:<42} {c.get('phone') or '-':<14} {n}× z města firmy (celkem otevřeno {tot}×), naposledy {d}")
     zitra = t + datetime.timedelta(days=1)
     print(f"\nFOLLOW-UPY – {kdo} (1. = odeslání + 3 dny, 2. = 5 dní po 1., víkend → pondělí):")
     for nadpis, fn, plne in (('PO TERMÍNU – poslat hned', lambda d: d < t, True), ('DNES', lambda d: d == t, True),
@@ -274,6 +295,12 @@ def fronta(actor, vse=False):
         print(f"\n{nadpis} – {kdo} ({len(xs)}):")
         for c in xs:
             print(f"  #{c['id']:<4} {c['name'][:42]:<42} {c.get('email') or '-'}  {c.get('preview') or c.get('web') or ''}")
+        if st == 'novy':
+            od = sorted((c for c in clients if c['stage'] == 'odeslano' and mine(c) and (c.get('sent_date') or '') >= str(t - datetime.timedelta(days=3))),
+                        key=lambda c: c['sent_date'], reverse=True)
+            print(f"\n  ODESLÁNO za poslední 3 dny – {kdo} ({len(od)}):")
+            for c in od:
+                print(f"    #{c['id']:<4} {c['name'][:42]:<42} {c['sent_date']}{'  (zapsal Gmail)' if c.get('updated_by') == 'Gmail' else ''}")
 
 
 def kv(pairs):

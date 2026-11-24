@@ -53,3 +53,12 @@ CREATE INDEX IF NOT EXISTS i_act_date ON activity(date);
 -- ALTER TABLE clients ADD COLUMN reply_at TEXT DEFAULT '';
 -- ALTER TABLE clients ADD COLUMN reply_text TEXT DEFAULT '';
 -- ALTER TABLE clients ADD COLUMN reply_link TEXT DEFAULT '';
+
+-- 2026-11-24: odeslané maily z Gmailu (každý mail se započítá jen jednou)
+CREATE TABLE IF NOT EXISTS sent_mail (
+  id TEXT PRIMARY KEY,
+  client_id INTEGER,
+  kind TEXT,
+  at TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
